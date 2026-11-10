@@ -143,6 +143,9 @@ body[data-screen="result"] .act { min-height: 0; }
 .dstage.is-out { opacity: 0; }
 .ds-die { position: absolute; left: 0; top: 0; width: 88px; height: 88px; will-change: transform; }
 .ds-die .die { --s: 88px; }
+.ds-die .die .shade { transform: rotateX(-40deg) rotateY(-28deg); }
+.ds-die .shade .st { background: rgba(255, 255, 255, .12); }
+.ds-die .shade .sf { background: rgba(0, 0, 0, .14); }
 .ds-shadow { position: absolute; left: 0; top: 0; width: 88px; height: 20px; border-radius: 50%; background: #000; will-change: transform; }
 .ds-call { position: absolute; display: flex; align-items: baseline; gap: 6px; white-space: nowrap; background: var(--marker); border: 3px solid var(--ink); box-shadow: 5px 5px 0 var(--ink); padding: 0 18px 2px; translate: -50% 0; transform: skewX(-8deg) scale(.3); opacity: 0; }
 .ds-call b { font-size: 46px; font-weight: 900; line-height: 1.15; font-variant-numeric: tabular-nums; }
@@ -1490,10 +1493,11 @@ body[data-screen="result"] .act { min-height: 0; }
       <div class="ds-call" style="left:${Math.round(tx)}px;top:${Math.round(ty + S * 0.86)}px"><b>${val}</b><span>マス すすむ</span></div></div>`);
     const die = el.querySelector('.ds-die'), cube = el.querySelector('.cube'), sh = el.querySelector('.ds-shadow');
     const [ax, ay] = SHOW[val];
-    // roll: 床の上での前転（手前方向）の角度。90°ごとに手前の面が入れ替わる
+    // 出目は本物と同じく「上の面」。少し上から見下ろす角度にして、上の面が読めるようにする
+    // roll: 床の上での前転（手前方向）の角度
     const put = (x, y, lift, sc, rx, ry, rz, roll = 0, sqx = 1, sqy = 1) => {
       die.style.transform = `translate3d(${f1(x - S / 2)}px,${f1(y - lift - S / 2)}px,0) scale(${(sc * sqx).toFixed(3)},${(sc * sqy).toFixed(3)})`;
-      cube.style.transform = `rotateX(-24deg) rotateY(-28deg) rotateX(${f1(-roll)}deg) rotateZ(${f1(rz)}deg) rotateX(${f1(ax + rx)}deg) rotateY(${f1(ay + ry)}deg)`;
+      cube.style.transform = `rotateX(-40deg) rotateY(-28deg) rotateX(${f1(-roll)}deg) rotateX(90deg) rotateZ(${f1(rz)}deg) rotateX(${f1(ax + rx)}deg) rotateY(${f1(ay + ry)}deg)`;
       const k = clamp(1 - lift / 260, 0.35, 1);
       sh.style.transform = `translate3d(${f1(x - S / 2)}px,${f1(y + S * 0.42)}px,0) scale(${(sc * k).toFixed(2)})`;
       sh.style.opacity = (0.3 * k).toFixed(2);
