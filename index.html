@@ -731,17 +731,31 @@ body[data-screen="result"] .act { min-height: 0; }
   const lerp = (a, b, t) => a + (b - a) * t;
   const f1 = n => Math.round(n * 10) / 10;
   // 0→1 を dur ミリ秒かけて fn に渡す
+  // 描画が止められる環境（アプリ内のページ・バックグラウンド等）でも、時間が来たら必ず終わる
   function animate(dur, fn) {
     dur /= SPEED;
     return new Promise(res => {
       const t0 = performance.now();
-      const tick = now => { const t = clamp((now - t0) / dur, 0, 1); fn(t); if (t < 1) requestAnimationFrame(tick); else res(); };
+      let done = false;
+      const finish = () => { if (done) return; done = true; try { fn(1); } catch (e) { /* 描画の失敗は無視 */ } res(); };
+      const tick = () => {
+        if (done) return;
+        const t = clamp((performance.now() - t0) / dur, 0, 1);
+        try { fn(t); } catch (e) { finish(); return; }
+        if (t < 1) requestAnimationFrame(tick); else finish();
+      };
       requestAnimationFrame(tick);
+      setTimeout(finish, dur + 120);
     });
   }
 
   // ---------- 音 ----------
   // 駒やサイコロの「コトッ」という木の音はここで鳴らす（出題・正解などは共通の Sound を使う）
+  // 音の失敗で進行が止まらないように、共通の Sound の呼び出しはすべて守る
+  ['unlock', 'play', 'ready', 'bgm', 'stop', 'stopBgm'].forEach(k => {
+    const f = Sound[k]; if (typeof f !== 'function') return;
+    Sound[k] = function () { try { return f.apply(Sound, arguments); } catch (e) { return false; } };
+  });
   const Sfx = (() => {
     let ctx = null;
     function unlock() {
@@ -778,8 +792,8 @@ body[data-screen="result"] .act { min-height: 0; }
     }
     return { unlock, play };
   })();
-  function sound(name) { if (state.setup.sound) Sound.play(name); }
-  function sfx(name) { if (state.setup.sound) Sfx.play(name); }
+  function sound(name) { try { if (state.setup.sound) Sound.play(name); } catch (e) { /* 音が出せない環境 */ } }
+  function sfx(name) { try { if (state.setup.sound) Sfx.play(name); } catch (e) { /* 音が出せない環境 */ } }
   function buzz(ms) { try { navigator.vibrate && navigator.vibrate(ms); } catch (e) { /* 非対応 */ } }
 
   // ---------- 盤面（マスの並び） ----------
@@ -1568,13 +1582,19 @@ body[data-screen="result"] .act { min-height: 0; }
   async function openingPan() {
     const g = G();
     if (RM || !$('.mapwrap')) { callTurn(); return; }
-    busy = true;
+    // 演出中にサイコロを押されたら、演出はそこで打ち切ってすぐ振れるようにする（busy にはしない）
     const wrap = $('.mapwrap');
     const end = wrap.scrollTop;
+    const run = V.opening = {};
     wrap.scrollTop = 0; V.cam.run = false;
     await sleep(900);
-    await animate(Math.min(3000, 1500 + g.board.len * 50), t => { const e = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; wrap.scrollTop = end * e; });
-    busy = false;
+    if (V.opening !== run) return;
+    await animate(Math.min(3000, 1500 + g.board.len * 50), t => {
+      if (V.opening !== run) return;
+      const e = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; wrap.scrollTop = end * e;
+    });
+    if (V.opening !== run) return;
+    V.opening = null;
     callTurn();
   }
   function callTurn() {
@@ -1593,18 +1613,21 @@ body[data-screen="result"] .act { min-height: 0; }
     const g = G();
     if (busy || g.phase !== 'turn') return;
     busy = true;
+    V.opening = null;
     const val = 1 + rnd(6);
     camTo(cur().pos);
     g.dice = val; g.phase = 'rolling';
     // サイコロは手元の絵から飛び出すので、足元の表示はまだ書き換えない
     const btn = $('.act .big'); if (btn) { btn.disabled = true; btn.textContent = 'コロコロ…'; }
-    await rollDice(val);
+    // 演出がどこかで失敗しても、出目どおりに進める
+    try { await rollDice(val); } catch (e) { const fx = document.getElementById('fx'); if (fx) fx.innerHTML = ''; }
     snapshot();
     g.from = cur().pos;
     g.phase = 'moving'; g.res = null; save();
     V.move = { label: `${val}マス進む`, total: val, dice: val };
     render();
-    const stopped = await walk(g.turn, val, { count: true });
+    let stopped = false;
+    try { stopped = await walk(g.turn, val, { count: true }); } catch (e) { /* 移動演出の失敗は無視 */ }
     V.move = null;
     busy = false;
     landed(stopped);
