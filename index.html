@@ -436,13 +436,6 @@ body[data-screen="result"] .act { min-height: 0; }
 @keyframes grow { from { width: 0; } }
 .result > .sub { padding: 14px 0 20px; }
 
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation: none !important; transition: none !important; }
-  .ds-call { transform: skewX(-8deg); opacity: 1; }
-  .dstage { background: rgba(20, 20, 20, .34); }
-  .stamp circle, .stamp path { stroke-dashoffset: 0; }
-  .telop-in { transform: skewX(-8deg); }
-}
 @media (max-height: 620px) {
   .act { min-height: calc(170px + env(safe-area-inset-bottom, 0px)); gap: 8px; }
   .big { min-height: 54px; }
@@ -703,7 +696,8 @@ body[data-screen="result"] .act { min-height: 0; }
   const MAP_W = 360, DY = 78, PAD_T = 204, PAD_B = 136;
   const INK = '#141414';
   const app = document.getElementById('app');
-  const RM = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  // 端末の「視差効果を減らす」設定に関係なく、サイコロやコマの演出はいつもフルで見せる
+  const RM = false;
   // 動作確認用: ?speed=3 でアニメーションを早送り
   const SPEED = Math.max(0.25, Number(new URLSearchParams(location.search).get('speed')) || 1);
 
