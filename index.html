@@ -13,168 +13,442 @@
 <title>すごろくクイズ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700;900&display=swap">
 <style>
-/* スマホ1台を回して遊ぶすごろく：上に盤面、下に親指で押す大きなボタン。白地・黒・ON AIR の赤・マーカーの黄 */
+/* スマホ1台を回して遊ぶすごろく。上に紙の地図、下に親指で押す操作卓。白・黒・ON AIR の赤・マーカーの黄。
+   影はぼかさず「厚み」で見せる（押すと沈むボタン、厚みのあるマス） */
 :root {
-  --paper: #F6F6F4;
+  --paper: #F2F2EE;
   --white: #FFFFFF;
-  --rule: #D9D9D6;
+  --rule: #D5D5D0;
   --ink: #141414;
-  --sub: #66665F;
+  --sub: #5F5F58;
   --onair: #E60012;
   --marker: #FFE14D;
-  --ok: #0E8A4F;
+  --amber: #F4B32C;
   --font: "Zen Kaku Gothic New", "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Yu Gothic UI", sans-serif;
+  --pad-l: max(16px, env(safe-area-inset-left, 0px));
+  --pad-r: max(16px, env(safe-area-inset-right, 0px));
+  --pop: cubic-bezier(.2, 1.5, .4, 1);
+  --out: cubic-bezier(.2, .9, .25, 1);
   color-scheme: light;
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-html, body { height: 100%; }
-body { margin: 0; background: var(--paper); color: var(--ink); font-family: var(--font); font-size: 16px; font-weight: 500; line-height: 1.5; overscroll-behavior: none; }
+html, body { height: 100%; overflow: hidden; }
+body { margin: 0; background: var(--ink); color: var(--ink); font-family: var(--font); font-size: 16px; font-weight: 500; line-height: 1.5; overscroll-behavior: none; -webkit-text-size-adjust: 100%; }
 button, input { font: inherit; color: inherit; }
-button { cursor: pointer; touch-action: manipulation; }
-button:disabled { opacity: .35; cursor: default; }
-:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
-#app { height: 100dvh; display: flex; flex-direction: column; }
-#app > main { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+button { cursor: pointer; touch-action: manipulation; -webkit-user-select: none; user-select: none; }
+button:disabled { cursor: default; }
+:focus-visible { outline: 3px solid var(--onair); outline-offset: 2px; }
+#app { height: 100dvh; display: flex; flex-direction: column; background: var(--white); overflow: hidden; }
+#app > main { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; }
 
+/* ---- 上の帯 ---- */
 .bar {
-  position: sticky; top: 0; z-index: 10; display: flex; align-items: center; gap: 10px;
-  padding: calc(10px + env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) 10px max(16px, env(safe-area-inset-left, 0px));
+  position: relative; z-index: 10; display: flex; align-items: center; gap: 10px; flex: none;
+  padding: calc(6px + env(safe-area-inset-top, 0px)) max(8px, env(safe-area-inset-right, 0px)) 6px var(--pad-l);
   background: var(--ink); color: var(--white);
 }
-.bar .title { font-weight: 900; font-size: 17px; letter-spacing: .04em; }
-.bar .title::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--onair); margin-right: 8px; vertical-align: 1px; }
-.bar .count { font-size: 12px; color: #BBB; margin-left: auto; }
-.bar .icon { border: 0; background: transparent; color: var(--white); font-size: 22px; line-height: 1; padding: 0 4px 6px; }
-.menu { position: fixed; z-index: 20; top: calc(52px + env(safe-area-inset-top, 0px)); right: max(12px, env(safe-area-inset-right, 0px)); background: var(--white); border: 1px solid var(--ink); display: grid; min-width: 180px; }
-.menu button { border: 0; border-bottom: 1px solid var(--rule); background: var(--white); text-align: left; padding: 14px 16px; font-size: 15px; }
+.bar .title { font-weight: 900; font-size: 15px; letter-spacing: .06em; white-space: nowrap; }
+.bar .title::before { content: ""; display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--onair); margin-right: 8px; vertical-align: 1px; }
+.bar .count { font-size: 12px; font-weight: 700; color: #C9C9C4; margin-left: auto; white-space: nowrap; }
+.bar .count b { display: inline-block; background: var(--onair); color: var(--white); font-weight: 900; padding: 0 7px; margin-right: 8px; transform: skewX(-8deg); font-variant-numeric: tabular-nums; }
+.bar .icon { border: 0; background: transparent; width: 44px; height: 36px; display: grid; place-content: center; gap: 4px; padding: 0; }
+.bar .icon i { display: block; width: 20px; height: 2.5px; background: var(--white); }
+.menu-back { position: fixed; inset: 0; z-index: 19; }
+.menu { position: fixed; z-index: 20; top: calc(46px + env(safe-area-inset-top, 0px)); right: max(8px, env(safe-area-inset-right, 0px)); background: var(--white); border: 2.5px solid var(--ink); box-shadow: 5px 5px 0 var(--ink); display: grid; min-width: 190px; animation: menuIn .16s var(--out); transform-origin: 100% 0; }
+@keyframes menuIn { from { transform: scale(.9); opacity: 0; } }
+.menu button { border: 0; border-bottom: 1px solid var(--rule); background: var(--white); text-align: left; padding: 15px 16px; font-size: 16px; font-weight: 700; }
+.menu button:disabled { color: #AAA; }
 .menu button:last-child { border-bottom: 0; color: var(--sub); }
 
+/* ---- 下の操作卓 ---- */
 .act {
-  position: relative; z-index: 15; display: grid; gap: 8px;
-  padding: 12px max(16px, env(safe-area-inset-right, 0px)) calc(14px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
-  background: var(--white); border-top: 1px solid var(--rule);
+  position: relative; z-index: 15; flex: none; display: grid; gap: 10px; align-content: end;
+  padding: 12px var(--pad-r) calc(12px + env(safe-area-inset-bottom, 0px)) var(--pad-l);
+  background: var(--white); border-top: 3px solid var(--ink);
+  min-height: calc(186px + env(safe-area-inset-bottom, 0px));
 }
-.big { width: 100%; border: 0; border-radius: 10px; background: var(--ink); color: var(--white); font-size: 19px; font-weight: 900; padding: 16px; min-height: 56px; }
-.big:active:not(:disabled) { transform: translateY(1px); background: #333; }
-.big.is-sub { background: var(--white); color: var(--ink); border: 1px solid var(--ink); }
-.big.is-ok { background: var(--ok); }
-.big.is-ng { background: var(--white); color: var(--ink); border: 1px solid var(--ink); }
-.judge { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.link { border: 0; background: transparent; color: var(--sub); text-decoration: underline; text-underline-offset: 3px; padding: 8px; font-size: 14px; }
-.sub { margin: 0; color: var(--sub); font-size: 14px; text-align: center; }
-.msg { margin: 0; font-weight: 700; font-size: 16px; text-align: center; }
-.who { text-align: center; font-size: 15px; }
-.who b { display: inline-block; color: var(--white); background: var(--pc); padding: 2px 12px; font-size: 20px; font-weight: 900; margin-right: 4px; }
-.toggle { display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 15px; font-weight: 700; color: var(--onair); padding: 6px; }
-.toggle input { width: 22px; height: 22px; accent-color: var(--onair); }
+.act.is-q, .act.is-home { min-height: 0; }
+body[data-screen="result"] .act { min-height: 0; }
+.act.is-fresh > * { animation: actIn .3s var(--out) backwards; }
+.act.is-fresh > *:nth-child(2) { animation-delay: .05s; }
+.act.is-fresh > *:nth-child(3) { animation-delay: .1s; }
+@keyframes actIn { from { transform: translateY(14px); opacity: 0; } }
 
-.toast { position: fixed; left: 50%; bottom: calc(110px + env(safe-area-inset-bottom, 0px)); z-index: 30; transform: translateX(-50%); opacity: 0; pointer-events: none; background: var(--ink); color: var(--white); padding: 8px 14px; border-radius: 6px; font-size: 14px; transition: opacity .15s; max-width: calc(100vw - 32px); }
+/* 押すと沈むボタン */
+.big {
+  width: 100%; min-height: 60px; padding: 10px 14px; margin-bottom: 5px;
+  border: 2.5px solid var(--ink); border-radius: 10px; background: #2B2B2B; color: var(--white);
+  font-size: 20px; font-weight: 900; letter-spacing: .04em; line-height: 1.2;
+  box-shadow: 0 5px 0 var(--ink); transition: transform .07s, box-shadow .07s;
+}
+.big:active:not(:disabled) { transform: translateY(4px); box-shadow: 0 1px 0 var(--ink); }
+.big:disabled { transform: translateY(4px); box-shadow: 0 1px 0 var(--ink); opacity: .55; }
+.big.is-red { background: var(--onair); }
+.big.is-white { background: var(--white); color: var(--ink); }
+.big.is-yellow { background: var(--marker); color: var(--ink); }
+.big.is-amber { background: var(--amber); color: var(--ink); }
+.big i { font-style: normal; font-size: 24px; margin-right: 6px; vertical-align: -2px; }
+.big .nx { display: inline-block; background: var(--pc); padding: 0 9px 1px; margin: 0 2px; border-radius: 4px; box-shadow: 0 0 0 2px var(--white); }
+.judge { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.link { border: 0; background: transparent; color: var(--sub); text-decoration: underline; text-underline-offset: 3px; padding: 8px; font-size: 14px; }
+.sub { margin: 0; color: var(--sub); font-size: 13px; font-weight: 700; text-align: center; }
+.sub.is-left { text-align: left; margin-top: 4px; }
+.sub mark { background: var(--marker); color: var(--ink); padding: 1px 6px; }
+.hint { margin: 0; color: var(--sub); font-size: 14px; font-weight: 700; text-align: center; }
+.msg { margin: 0; font-weight: 700; font-size: 15px; line-height: 1.45; text-align: center; text-wrap: balance; }
+.mini-pawn { display: inline-block; flex: none; width: 30px; }
+.mini-pawn .pawn { display: block; width: 100%; height: auto; overflow: visible; }
+.who { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.who .mini-pawn { width: 34px; }
+.who-t { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.who-t b { font-size: 27px; font-weight: 900; line-height: 1.15; border-bottom: 5px solid var(--pc); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.who-t small { font-size: 15px; font-weight: 700; white-space: nowrap; }
+.turn-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; min-height: 84px; }
+.die-btn { position: relative; border: 0; background: transparent; width: 92px; height: 84px; padding: 0; display: grid; place-items: center; }
+.die-btn::before { content: ""; position: absolute; left: 18px; right: 14px; bottom: 4px; height: 12px; border-radius: 50%; background: rgba(0, 0, 0, .16); }
+.die-btn:active .die { transform: scale(.92); }
+
+.toast { position: fixed; left: 50%; bottom: calc(120px + env(safe-area-inset-bottom, 0px)); z-index: 60; transform: translateX(-50%); opacity: 0; pointer-events: none; background: var(--ink); color: var(--white); border: 2px solid var(--white); padding: 8px 14px; font-size: 14px; font-weight: 700; transition: opacity .15s; max-width: calc(100vw - 32px); white-space: nowrap; }
 .toast.is-on { opacity: 1; }
 
+/* ---- サイコロ（立方体） ---- */
+.die { --s: 62px; position: relative; width: var(--s); height: var(--s); perspective: calc(var(--s) * 7); transition: transform .08s; }
+.die .cube, .die .shade { position: absolute; inset: 0; transform-style: preserve-3d; transform: rotateX(-24deg) rotateY(-28deg); }
+.f { position: absolute; inset: 0; display: grid; grid-template: repeat(3, 1fr) / repeat(3, 1fr); place-items: center; padding: 13%; background: #FBF8EF; border: calc(var(--s) * .045) solid var(--ink); border-radius: 15%; backface-visibility: hidden; }
+.f i { display: block; }
+.f i.p { width: 76%; aspect-ratio: 1; border-radius: 50%; background: var(--ink); }
+.f1 i.p { width: 150%; background: var(--onair); }
+.f1 { transform: translateZ(calc(var(--s) / 2)); }
+.f6 { transform: rotateY(180deg) translateZ(calc(var(--s) / 2)); }
+.f3 { transform: rotateY(90deg) translateZ(calc(var(--s) / 2)); }
+.f4 { transform: rotateY(-90deg) translateZ(calc(var(--s) / 2)); }
+.f5 { transform: rotateX(90deg) translateZ(calc(var(--s) / 2)); }
+.f2 { transform: rotateX(-90deg) translateZ(calc(var(--s) / 2)); }
+/* 止まっているときだけ、上面を明るく・側面を暗くして立体に見せる */
+.shade { opacity: 0; pointer-events: none; }
+.shade i { position: absolute; inset: 0; border-radius: 15%; backface-visibility: hidden; }
+.shade .sr { transform: rotateY(90deg) translateZ(calc(var(--s) / 2 + .5px)); background: rgba(0, 0, 0, .2); }
+.shade .st { transform: rotateX(90deg) translateZ(calc(var(--s) / 2 + .5px)); background: rgba(255, 255, 255, .0); }
+.shade .sf { transform: translateZ(calc(var(--s) / 2 + .5px)); background: rgba(0, 0, 0, .07); }
+.die.is-idle .shade, .dstage.is-set .shade { opacity: 1; }
+.die.is-idle { animation: dieBob 2.2s ease-in-out infinite; }
+@keyframes dieBob { 0%, 100% { translate: 0 0; rotate: -3deg; } 50% { translate: 0 -5px; rotate: 3deg; } }
+.die2d { position: relative; display: inline-block; width: 46px; height: 46px; --s: 46px; flex: none; }
+.die2d .f { transform: none; box-shadow: 0 3px 0 var(--ink); }
+
+/* 振ったサイコロが転がる舞台 */
+#fx { position: fixed; inset: 0; z-index: 50; overflow: hidden; pointer-events: none; }
+.dstage { position: absolute; inset: 0; animation: scrim .35s .25s both; transition: opacity .2s; }
+@keyframes scrim { from { background: rgba(20, 20, 20, 0); } to { background: rgba(20, 20, 20, .34); } }
+.dstage.is-out { opacity: 0; }
+.ds-die { position: absolute; left: 0; top: 0; width: 88px; height: 88px; will-change: transform; }
+.ds-die .die { --s: 88px; }
+.ds-shadow { position: absolute; left: 0; top: 0; width: 88px; height: 20px; border-radius: 50%; background: #000; will-change: transform; }
+.ds-call { position: absolute; display: flex; align-items: baseline; gap: 6px; white-space: nowrap; background: var(--marker); border: 3px solid var(--ink); box-shadow: 5px 5px 0 var(--ink); padding: 0 18px 2px; translate: -50% 0; transform: skewX(-8deg) scale(.3); opacity: 0; }
+.ds-call b { font-size: 46px; font-weight: 900; line-height: 1.15; font-variant-numeric: tabular-nums; }
+.ds-call span { font-size: 17px; font-weight: 900; }
+.dstage.is-set .ds-call { animation: callIn .34s .1s var(--pop) forwards; }
+@keyframes callIn { to { transform: skewX(-8deg) scale(1); opacity: 1; } }
+
 /* ---- ホーム ---- */
-.home { padding: 8px max(16px, env(safe-area-inset-right, 0px)) 24px max(16px, env(safe-area-inset-left, 0px)); display: grid; gap: 4px; }
-.home h2 { font-size: 13px; font-weight: 700; color: var(--sub); margin: 18px 0 8px; padding-bottom: 4px; border-bottom: 1px solid var(--rule); }
-.home h2 small { font-weight: 500; margin-left: 6px; }
-.players { display: grid; gap: 8px; }
-.pin { display: grid; grid-template-columns: 8px 1fr auto; align-items: stretch; background: var(--white); border: 1px solid var(--rule); }
-.pin::before { content: ""; background: var(--pc); }
-.pin input { border: 0; padding: 12px; font-size: 17px; font-weight: 700; min-width: 0; background: transparent; }
-.pin input:focus { outline: none; background: #FFFBE6; }
-.pin .x { border: 0; background: transparent; color: var(--sub); font-size: 20px; padding: 0 14px; }
-.seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; border: 1px solid var(--ink); border-radius: 8px; overflow: hidden; }
-.seg button { border: 0; border-left: 1px solid var(--ink); background: var(--white); padding: 10px 4px; font-size: 15px; font-weight: 700; }
-.seg button:first-child { border-left: 0; }
-.seg button small { display: block; font-size: 11px; font-weight: 500; color: var(--sub); }
-.seg button.is-on { background: var(--ink); color: var(--white); }
-.seg button.is-on small { color: #CCC; }
-.chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.chip { border: 1px solid var(--rule); background: var(--white); border-radius: 999px; padding: 6px 12px; font-size: 14px; }
-.chip.is-ng { border-color: var(--onair); color: var(--onair); }
-.chip.is-on { background: var(--pc, var(--ink)); border-color: var(--pc, var(--ink)); color: var(--white); }
-.howto { margin-top: 16px; font-size: 14px; }
-.howto summary { color: var(--sub); text-decoration: underline; text-underline-offset: 3px; }
-.howto ol { padding-left: 20px; margin: 8px 0 0; display: grid; gap: 4px; }
+.home { background: var(--white); }
+.hero { background: var(--ink); color: var(--white); padding-top: env(safe-area-inset-top, 0px); }
+.hero-top { position: relative; padding: 18px var(--pad-r) 16px calc(var(--pad-l) + 4px); }
+.onair { margin: 0; font-size: 12px; font-weight: 700; letter-spacing: .14em; color: #D8D8D2; }
+.onair i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--onair); margin-right: 8px; animation: lamp 1.6s steps(1) infinite; }
+@keyframes lamp { 50% { opacity: .25; } }
+.logo { margin: 8px 0 0; font-weight: 900; line-height: 1; }
+.logo .l1 { display: block; font-size: clamp(44px, 14vw, 58px); letter-spacing: .02em; }
+.logo .l2 { display: inline-block; margin-top: 10px; font-size: clamp(34px, 11vw, 46px); background: var(--marker); color: var(--ink); padding: 5px 16px 7px; transform: skewX(-8deg) rotate(-2deg); transform-origin: 0 100%; }
+.hero-die { position: absolute; right: calc(var(--pad-r) + 16px); bottom: 22px; }
+.hero-die .die { --s: 60px; }
+.hero-art { display: block; width: 100%; height: 132px; border-top: 3px solid var(--marker); border-bottom: 3px solid var(--ink); }
+.hero-art text { font-family: var(--font); }
+#app.is-fresh .logo .l1 { animation: logoIn .5s var(--out) backwards; }
+#app.is-fresh .logo .l2 { animation: logo2In .45s .18s var(--pop) backwards; }
+#app.is-fresh .hero-die { animation: dieDrop .6s .35s var(--pop) backwards; }
+@keyframes logoIn { from { transform: translateX(-24px); opacity: 0; } }
+@keyframes logo2In { from { transform: skewX(-8deg) rotate(-2deg) scale(.5); opacity: 0; } }
+@keyframes dieDrop { from { transform: translateY(-70px) rotate(-120deg); opacity: 0; } }
+.form { padding: 2px var(--pad-r) 28px var(--pad-l); }
+.form h2 { display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 900; margin: 24px 0 10px; }
+.form h2 i { display: grid; place-items: center; width: 24px; height: 24px; background: var(--ink); color: var(--white); font-style: normal; font-size: 14px; font-weight: 900; }
+.form h2 small { margin-left: auto; font-size: 12px; font-weight: 700; color: var(--sub); }
+.players { display: grid; }
+.pin { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; align-items: center; gap: 10px; border-bottom: 2px solid var(--ink); padding: 3px 0 3px 4px; }
+.pin input { border: 0; padding: 11px 6px; font-size: 19px; font-weight: 700; min-width: 0; background: transparent; border-radius: 0; }
+.pin input::placeholder { color: #B5B5AE; font-weight: 500; }
+.pin input:focus { outline: none; background: #FFF6BF; }
+.pin .x { border: 0; background: transparent; color: var(--sub); font-size: 22px; width: 44px; height: 44px; }
+.add { width: 100%; margin-top: 12px; border: 2px dashed #9A9A93; border-radius: 8px; background: transparent; color: var(--sub); font-size: 15px; font-weight: 700; padding: 11px; }
+.seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 8px; }
+.seg button { border: 2.5px solid var(--ink); border-radius: 8px; background: var(--white); padding: 9px 4px; min-height: 50px; font-size: 16px; font-weight: 900; line-height: 1.25; box-shadow: 0 4px 0 var(--ink); margin-bottom: 4px; transition: transform .07s, box-shadow .07s; }
+.seg button small { display: block; font-size: 11px; font-weight: 700; color: var(--sub); }
+.seg button.is-on { background: var(--ink); color: var(--white); transform: translateY(4px); box-shadow: none; }
+.seg button.is-on small { color: var(--marker); }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; border: 2px solid var(--ink); background: var(--white); border-radius: 999px; padding: 6px 13px 6px 9px; font-size: 14px; font-weight: 700; min-height: 38px; }
+.chip i { width: 13px; height: 13px; border-radius: 50%; background: var(--gc); border: 1.5px solid var(--ink); }
+.chip.is-ng { color: #8D8D86; border-color: #8D8D86; border-style: dashed; text-decoration: line-through; }
+.chip.is-ng i { background: transparent; border-color: #8D8D86; }
+.howto { margin-top: 24px; font-size: 14px; border-top: 1px solid var(--rule); padding-top: 12px; }
+.howto summary { font-weight: 700; padding: 6px 0; }
+.howto ol { padding-left: 22px; margin: 8px 0 0; display: grid; gap: 6px; }
 
 /* ---- 地図 ---- */
-.game { display: flex; flex-direction: column; overflow: hidden !important; position: relative; }
-.mapwrap { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; background: #DCEBC4; }
-.mapbox { position: relative; }
+.game { display: flex; flex-direction: column; overflow: hidden !important; position: relative; background: #CBE2A0; }
+.mapwrap { position: relative; z-index: 0; flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; scrollbar-width: none; background: #CBE2A0; }
+.mapwrap::-webkit-scrollbar { display: none; }
+.mapbox { position: relative; overflow: hidden; }
 .map { display: block; width: 100%; height: auto; }
-.map .rg { font-size: 13px; font-weight: 900; fill: rgba(20, 20, 20, .45); letter-spacing: .1em; }
-.map .ic { font-size: 16px; }
-.map .lb { font-size: 11px; font-weight: 900; fill: #141414; paint-order: stroke; stroke: rgba(255, 255, 255, .85); stroke-width: 3px; }
-.map .lb.is-stop { fill: #E60012; }
-.map .node text.ic { dominant-baseline: auto; }
-.piece {
-  position: absolute; z-index: 2; width: 30px; height: 30px; margin: -15px 0 0 -15px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg);
-  background: var(--pc); border: 2.5px solid #fff; box-shadow: 0 3px 6px rgba(0, 0, 0, .35);
-  display: grid; place-items: center; color: #fff; font-weight: 900; font-size: 13px;
-  transition: left .24s ease-in-out, top .24s ease-in-out;
-}
-.piece span { transform: rotate(45deg); }
-.piece.is-turn { width: 36px; height: 36px; margin: -18px 0 0 -18px; outline: 3px solid var(--marker); font-size: 15px; animation: bob 1s ease-in-out infinite; }
-@keyframes bob { 50% { translate: 0 -4px; } }
+.map text, .tok text { font-family: var(--font); }
+.map .lb { font-size: 11.5px; font-weight: 900; fill: var(--ink); paint-order: stroke; stroke: #FFFDF2; stroke-width: 3.6px; stroke-linejoin: round; }
+.map .lb .no { fill: var(--onair); }
+.map .lb.is-stop { fill: var(--onair); font-size: 13px; }
+.map .lb.is-start, .map .lb.is-goal { font-size: 13px; }
+.map .sg { font-size: 11px; font-weight: 900; fill: #3E2A14; }
 
-.stand { display: grid; grid-template-columns: repeat(auto-fit, minmax(72px, 1fr)); gap: 4px; padding: 6px max(8px, env(safe-area-inset-right, 0px)) 6px max(8px, env(safe-area-inset-left, 0px)); background: var(--white); border-top: 1px solid var(--rule); }
-.pl { display: flex; align-items: baseline; justify-content: space-between; gap: 4px; padding: 5px 8px; background: var(--paper); border-left: 5px solid var(--pc); font-size: 13px; min-width: 0; }
-.pl .nm { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pl .ps { font-weight: 900; font-size: 17px; font-variant-numeric: tabular-nums; }
-.pl .tag { font-size: 10px; color: var(--onair); }
-.pl.is-turn { background: var(--pc); color: var(--white); }
-.landed { display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 18px; }
-.landed .ic { font-size: 28px; }
-.landed.is-stop b { color: var(--onair); }
+/* 駒 */
+.pieces { position: absolute; inset: 0; pointer-events: none; }
+.piece { position: absolute; left: 0; top: 0; width: 0; height: 0; will-change: transform; }
+.piece.is-slide { transition: transform .38s cubic-bezier(.3, 1.3, .5, 1); }
+.pc-shadow { position: absolute; left: -14px; top: -3px; width: 28px; height: 9px; border-radius: 50%; background: #000; opacity: .3; }
+.pc-ring { display: none; position: absolute; left: -21px; top: -7px; width: 42px; height: 18px; border-radius: 50%; border: 3px solid var(--marker); box-shadow: 0 0 0 1.5px var(--ink), inset 0 0 0 1.5px var(--ink); }
+.piece.is-turn .pc-ring { display: block; animation: ring 1.3s ease-out infinite; }
+.piece.is-moving .pc-ring { display: none; }
+@keyframes ring { 0% { transform: scale(.7); opacity: 1; } 100% { transform: scale(1.5); opacity: 0; } }
+.pc-lift { position: absolute; left: -17px; top: -39px; width: 34px; height: 45px; transform-origin: 50% 39px; will-change: transform; }
+.pc-body, .pc-idle { width: 100%; height: 100%; transform-origin: 50% 39px; }
+.pc-body { will-change: transform; }
+.pawn { display: block; width: 34px; height: 44.2px; overflow: visible; }
+.pawn text { font-family: var(--font); }
+.piece.is-turn .pc-idle { scale: 1.18; animation: breathe 1.1s ease-in-out infinite; }
+.piece.is-turn.is-hop .pc-idle, .piece.is-turn.is-moving .pc-idle { animation: none; }
+@keyframes breathe { 0%, 100% { transform: scale(1, 1); } 50% { transform: scale(1.05, .93); } }
+/* 手番の駒の上の赤い矢印 */
+.piece.is-turn .pc-lift::before { content: ""; position: absolute; left: 50%; top: -22px; margin-left: -8px; border: 8px solid transparent; border-top: 11px solid var(--onair); border-bottom: 0; filter: drop-shadow(0 0 0 var(--white)) drop-shadow(0 1.5px 0 var(--white)) drop-shadow(1.5px 0 0 var(--white)) drop-shadow(-1.5px 0 0 var(--white)); animation: arrow .7s ease-in-out infinite alternate; }
+.piece.is-turn.is-moving .pc-lift::before { display: none; }
+@keyframes arrow { to { transform: translateY(-6px); } }
+.pc-tag { position: absolute; left: 50%; top: -30px; translate: -50% 0; min-width: 26px; height: 26px; padding: 0 5px; display: grid; place-items: center; background: var(--marker); border: 2.5px solid var(--ink); border-radius: 13px; font-size: 15px; font-weight: 900; line-height: 1; font-variant-numeric: tabular-nums; }
+.pc-tag[hidden] { display: none; }
+/* 着地の土ぼこり */
+.dust { position: absolute; left: 0; top: 0; width: 0; height: 0; z-index: 5; }
+.dust::before, .dust::after { content: ""; position: absolute; left: -5px; top: -5px; width: 10px; height: 10px; border-radius: 50%; background: #FBF4DD; border: 1.5px solid rgba(70, 48, 16, .55); animation: puffL .46s ease-out forwards; }
+.dust::after { animation-name: puffR; }
+.dust.is-big::before, .dust.is-big::after { width: 13px; height: 13px; animation-duration: .6s; }
+@keyframes puffL { from { transform: translate(-4px, 0) scale(.5); opacity: 1; } to { transform: translate(-24px, -7px) scale(1.25); opacity: 0; } }
+@keyframes puffR { from { transform: translate(4px, 0) scale(.5); opacity: 1; } to { transform: translate(24px, -7px) scale(1.25); opacity: 0; } }
 
-/* ---- 問題 ---- */
-.sheet-back { position: absolute; inset: 0; z-index: 8; background: rgba(20, 20, 20, .35); }
-.qcard { position: absolute; z-index: 9; left: 8px; right: 8px; bottom: 8px; max-height: calc(100% - 16px); overflow-y: auto; background: var(--white); border: 1px solid var(--ink); display: grid; gap: 12px; padding-bottom: 14px; animation: rise .2s ease-out; box-shadow: 0 -6px 20px rgba(0, 0, 0, .2); }
-@keyframes rise { from { transform: translateY(8px); opacity: 0; } to { transform: none; opacity: 1; } }
-.q-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; background: var(--pc); color: var(--white); font-weight: 900; padding: 8px 12px; font-size: 15px; }
-.q-genre { font-size: 12px; font-weight: 700; background: rgba(0, 0, 0, .25); padding: 2px 8px; }
-.q-img { display: grid; place-items: center; padding: 0 16px; }
-.q-img svg { width: 100%; max-width: 280px; height: auto; max-height: 220px; }
-.q-img.is-emoji { font-size: 110px; line-height: 1; }
-.q-lead { margin: 0 16px; color: var(--sub); font-size: 14px; }
-.q-text { margin: 0 16px; font-size: 21px; font-weight: 900; line-height: 1.5; text-wrap: pretty; }
-.q-text.is-display { font-size: 34px; text-align: center; line-height: 1.3; }
-.choices { display: grid; gap: 6px; margin: 0 12px; }
-.choice { display: flex; align-items: center; gap: 12px; text-align: left; border: 1px solid var(--ink); border-radius: 8px; background: var(--white); padding: 12px; font-size: 17px; font-weight: 700; min-height: 52px; }
-.choice b { color: var(--onair); font-weight: 900; }
+/* 順位ボード */
+#s-stand { flex: none; background: var(--white); border-top: 3px solid var(--ink); position: relative; z-index: 6; }
+.stand { display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); }
+.pl { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: 2px 4px; padding: 9px 8px 2px; border-left: 1px solid var(--rule); box-shadow: inset 0 5px 0 var(--pc); min-width: 0; transition: background .2s; }
+.pl:first-child { border-left: 0; }
+.pl .nm { font-size: 12px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pl .ps { font-weight: 900; font-size: 20px; line-height: 1.1; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pl .ps small { font-size: 10px; font-weight: 700; color: var(--sub); }
+.pl .ps em { font-style: normal; font-size: 13px; color: var(--onair); }
+.pl.is-narrow { grid-template-columns: minmax(0, 1fr); padding: 8px 5px 2px; gap: 0; }
+.pl.is-narrow .ps { font-size: 17px; }
+.pl.is-turn { background: var(--marker); }
+.pl.is-turn .ps small { color: var(--ink); }
+.pl .rest, .pl .lead { position: absolute; top: 0; right: 0; font-size: 9px; font-weight: 900; line-height: 12px; padding: 0 4px; background: var(--ink); color: var(--white); }
+.pl .rest { background: var(--onair); }
+.race { position: relative; height: 15px; }
+.race::before { content: ""; position: absolute; left: 14px; right: 14px; top: 6px; height: 2px; background: var(--ink); }
+.race-goal { position: absolute; right: 8px; top: 2px; width: 10px; height: 10px; background: conic-gradient(var(--ink) 25%, var(--white) 0 50%, var(--ink) 0 75%, var(--white) 0); border: 1.5px solid var(--ink); }
+.race-dot { position: absolute; top: 2px; left: calc(10px + var(--at) * (100% - 32px)); width: 10px; height: 10px; border-radius: 50%; background: var(--pc); border: 2px solid var(--ink); transition: left .45s var(--out); }
+.race-dot.is-turn { z-index: 1; transform: scale(1.35); }
+
+/* 移動中 */
+.left-box { display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 700; padding-right: 4px; }
+.left-box b { font-size: 34px; font-weight: 900; line-height: 1; margin-left: 4px; font-variant-numeric: tabular-nums; }
+.steps { display: flex; gap: 6px; min-height: 65px; align-items: center; }
+.steps i { flex: 1; max-width: 56px; height: 12px; border: 2.5px solid var(--ink); border-radius: 6px; background: var(--white); transition: background .15s; }
+.steps i.is-done { background: var(--onair); }
+
+/* マスに到着 */
+.landed { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px; margin: -12px calc(-1 * var(--pad-r)) 0 calc(-1 * var(--pad-l)); padding: 6px var(--pad-r) 6px var(--pad-l); background: var(--ink); color: var(--white); }
+.tok { display: block; width: 52px; height: auto; overflow: visible; flex: none; }
+.landed-t { display: grid; min-width: 0; }
+.landed-t small { font-size: 12px; font-weight: 700; color: var(--marker); }
+.landed-t b { font-size: 25px; font-weight: 900; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.landed.is-challenge, .landed.is-stop { background: var(--onair); }
+.landed.is-stop { background-image: repeating-linear-gradient(-45deg, transparent 0 14px, rgba(0, 0, 0, .14) 14px 28px); }
+.landed.is-all { background: var(--marker); color: var(--ink); background-image: radial-gradient(rgba(0, 0, 0, .13) 1.3px, transparent 1.6px); background-size: 9px 9px; }
+.landed.is-drink { background: var(--amber); color: var(--ink); }
+.landed.is-event { background: var(--white); color: var(--ink); border-bottom: 2.5px solid var(--ink); }
+.landed.is-all .landed-t small, .landed.is-drink .landed-t small { color: var(--ink); }
+.landed.is-event .landed-t small { color: var(--onair); }
+.act.is-fresh .landed { animation: wipe .34s var(--out) backwards; }
+.act.is-fresh .landed .tok { animation: tokIn .42s .12s var(--pop) backwards; }
+@keyframes wipe { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+@keyframes tokIn { from { transform: scale(.2) rotate(-40deg); opacity: 0; } }
+
+/* 手番の結果 */
+.res { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 12px; min-height: 64px; }
+.res-mark { display: grid; place-items: center; width: 56px; height: 56px; font-size: 50px; font-weight: 900; line-height: 1; color: var(--ink); }
+.res.is-ok .res-mark { color: var(--onair); }
+.res.is-goal .res-mark { font-size: 40px; }
+.res .mini-pawn { width: 40px; margin: 0 8px; }
+.res-t { display: grid; min-width: 0; }
+.res-t small { font-size: 12px; font-weight: 700; color: var(--sub); }
+.res-t b { font-size: 18px; font-weight: 900; line-height: 1.35; text-wrap: balance; }
+.act.is-fresh .res-mark { animation: tokIn .4s .1s var(--pop) backwards; }
+
+/* ---- 問題シート ---- */
+.sheet-back { position: absolute; inset: 0; z-index: 8; background: rgba(20, 20, 20, .5); transition: opacity .2s; }
+.qcard { position: absolute; z-index: 9; inset: 12px 0 0; background: var(--white); border-top: 4px solid var(--ink); overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; transition: transform .2s ease-in; }
+.is-fresh .sheet-back { animation: fade .25s both; }
+.is-fresh .qcard { animation: sheetUp .36s var(--out) both; }
+.qcard.is-out { transform: translateY(102%); }
+.sheet-back.is-out { opacity: 0; }
+@keyframes fade { from { opacity: 0; } }
+@keyframes sheetUp { from { transform: translateY(60%); opacity: 0; } }
+.q-head { position: sticky; top: 0; z-index: 2; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 7px 12px 7px 10px; background: var(--ink); color: var(--white); }
+.q-no { background: var(--onair); color: var(--white); font-size: 22px; font-weight: 900; line-height: 1.3; padding: 0 9px; transform: skewX(-8deg); font-variant-numeric: tabular-nums; }
+.q-no small { font-size: 13px; margin-right: 1px; }
+.q-who { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.q-who .mini-pawn { width: 22px; }
+.q-who b { font-size: 17px; font-weight: 900; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.q-who em { font-style: normal; font-size: 12px; font-weight: 900; background: var(--marker); color: var(--ink); padding: 1px 7px; white-space: nowrap; }
+.q-genre { font-size: 12px; font-weight: 900; padding: 3px 9px; background: var(--gc); color: var(--white); box-shadow: 0 0 0 1.5px var(--white); white-space: nowrap; }
+.qcard.is-all .q-head { background: var(--marker); color: var(--ink); background-image: radial-gradient(rgba(0, 0, 0, .13) 1.3px, transparent 1.6px); background-size: 9px 9px; }
+.qcard.is-all .q-genre { box-shadow: 0 0 0 1.5px var(--ink); }
+.qcard.is-challenge .q-head { background: var(--onair); }
+.qcard.is-challenge .q-no { background: var(--ink); }
+.qcard.is-stop .q-head { background-image: repeating-linear-gradient(-45deg, transparent 0 14px, rgba(255, 255, 255, .1) 14px 28px); }
+.q-stake { margin: 0; padding: 5px 12px; background: var(--paper); border-bottom: 1px solid var(--rule); font-size: 12px; font-weight: 700; color: #45453F; }
+.q-body { display: grid; gap: 14px; padding: 16px 14px 24px; }
+.q-img { display: grid; place-items: center; }
+.q-img svg { width: 100%; max-width: 280px; height: auto; max-height: 200px; }
+.q-img.is-emoji { font-size: 104px; line-height: 1.1; }
+.q-lead { margin: 0; color: var(--sub); font-size: 14px; font-weight: 700; }
+.q-text { font-size: 21px; font-weight: 900; line-height: 1.5; text-wrap: pretty; overflow-wrap: anywhere; }
+.q-text.is-display { font-size: 34px; text-align: center; line-height: 1.3; background: var(--paper); padding: 14px 8px; border: 2.5px solid var(--ink); }
+.choices { display: grid; gap: 9px; }
+.choice { display: grid; grid-template-columns: 46px minmax(0, 1fr) auto; align-items: stretch; text-align: left; min-height: 56px; padding: 0; margin-bottom: 4px; overflow: hidden; border: 2.5px solid var(--ink); border-radius: 8px; background: var(--white); font-size: 17px; font-weight: 700; line-height: 1.35; box-shadow: 0 4px 0 var(--ink); transition: transform .07s, box-shadow .07s, opacity .2s; }
+.choice b { display: grid; place-items: center; background: var(--ink); color: var(--white); font-size: 19px; font-weight: 900; }
+.choice span { align-self: center; padding: 9px 12px; overflow-wrap: anywhere; }
+.choice .mk { align-self: center; font-style: normal; font-size: 30px; font-weight: 900; line-height: 1; padding-right: 12px; }
+.choice:active:not(:disabled) { transform: translateY(3px); box-shadow: 0 1px 0 var(--ink); }
+.is-fresh .choice { animation: choiceIn .3s var(--out) backwards; }
+.is-fresh .choice:nth-child(1) { animation-delay: .16s; }
+.is-fresh .choice:nth-child(2) { animation-delay: .22s; }
+.is-fresh .choice:nth-child(3) { animation-delay: .28s; }
+.is-fresh .choice:nth-child(4) { animation-delay: .34s; }
+@keyframes choiceIn { from { transform: translateX(26px); opacity: 0; } }
+.choice.is-picked { transform: translateY(4px); box-shadow: none; animation: picked .26s steps(1) infinite; }
+@keyframes picked { 0% { background: var(--marker); } 50% { background: var(--white); } }
+.choice.is-wait { opacity: .5; }
 .choice.is-answer { background: var(--marker); }
-.choice.is-wrong { background: var(--ink); color: var(--white); }
-.choice.is-dim { opacity: .4; }
+.choice.is-answer b { background: var(--onair); }
+.choice.is-answer .mk { color: var(--onair); }
+.choice.is-wrong { background: #2B2B2B; color: var(--white); transform: translateY(4px); box-shadow: none; }
+.choice.is-dim { opacity: .4; transform: translateY(4px); box-shadow: none; }
 .five { display: flex; justify-content: center; gap: 6px; }
-.five span { display: grid; place-items: center; width: 52px; height: 52px; border: 2.5px solid var(--ink); font-size: 28px; font-weight: 900; }
-.five span:not(:empty) { background: var(--marker); animation: rise .2s ease-out backwards; animation-delay: calc(var(--i) * .15s); }
-.answer { margin: 0 12px; padding: 12px; border-top: 3px solid var(--onair); display: grid; gap: 4px; }
-.answer.is-ng { border-top-color: var(--ink); }
-.ans-head { font-weight: 900; color: var(--onair); font-size: 14px; }
+.five span { display: grid; place-items: center; width: 54px; height: 54px; border: 2.5px solid var(--ink); border-radius: 6px; font-size: 28px; font-weight: 900; box-shadow: 0 4px 0 var(--ink); }
+.five span:not(:empty) { background: var(--marker); animation: flipIn .3s var(--pop) backwards; animation-delay: calc(var(--i) * .13s); }
+@keyframes flipIn { from { transform: rotateX(90deg); } }
+.answer { display: grid; gap: 6px; padding: 12px 14px 14px; border: 2.5px solid var(--ink); border-radius: 8px; background: var(--white); }
+.answer.is-new { animation: ansIn .34s var(--pop) backwards; }
+@keyframes ansIn { from { transform: scale(.9); opacity: 0; } }
+.answer.is-ok { border-color: var(--onair); box-shadow: 0 4px 0 var(--onair); }
+.ans-head { font-weight: 900; color: var(--onair); font-size: 13px; letter-spacing: .08em; }
 .answer.is-ng .ans-head { color: var(--ink); }
-.ans { font-size: 26px; font-weight: 900; line-height: 1.3; }
-.ans { background: linear-gradient(transparent 58%, var(--marker) 58%); justify-self: start; padding: 0 2px; }
-.rule, .expl { margin: 0; font-size: 13px; color: var(--sub); }
-.pick { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
-.pick .chip { padding: 10px 16px; font-size: 16px; font-weight: 700; border-color: var(--pc); color: var(--pc); }
-.pick .chip.is-on { color: var(--white); }
+.ans { font-size: 27px; font-weight: 900; line-height: 1.35; overflow-wrap: anywhere; }
+.ans span { background: linear-gradient(transparent 58%, var(--marker) 58%); padding: 0 2px; }
+.rule, .expl { margin: 0; font-size: 13px; color: #45453F; line-height: 1.6; }
+.pick { display: flex; flex-wrap: wrap; gap: 8px 8px; justify-content: center; }
+.pchip { display: inline-flex; align-items: center; gap: 5px; min-height: 46px; padding: 4px 14px 4px 8px; margin-bottom: 4px; border: 2.5px solid var(--ink); border-radius: 8px; background: var(--white); font-size: 16px; font-weight: 900; box-shadow: 0 4px 0 var(--ink); transition: transform .07s, box-shadow .07s; }
+.pchip .mini-pawn { width: 22px; }
+.pchip.is-on { background: var(--pc); color: var(--white); transform: translateY(4px); box-shadow: none; }
+.pchip.is-on::after { content: "○"; font-size: 20px; line-height: 1; margin-left: 2px; }
 
-/* ---- サイコロ ---- */
-.dice { justify-self: center; cursor: pointer; display: grid; place-items: center; width: 96px; height: 96px; border: 4px solid var(--ink); border-radius: 18px; background: var(--white); font-size: 56px; font-weight: 900; font-variant-numeric: tabular-nums; }
-.dice.is-rolling { animation: shake .12s linear infinite; }
-@keyframes shake { 0% { transform: rotate(-10deg); } 50% { transform: rotate(10deg) translateY(-4px); } 100% { transform: rotate(-10deg); } }
-.dice-sm { display: inline-grid; place-items: center; width: 30px; height: 30px; border: 2px solid var(--ink); border-radius: 6px; font-weight: 900; }
+/* ---- 画面に重ねる演出 ---- */
+.telop { position: absolute; left: 0; right: 0; display: flex; justify-content: center; }
+.telop-in { display: inline-flex; align-items: baseline; gap: 10px; max-width: 94%; white-space: nowrap; background: var(--ink); color: var(--white); border-left: 12px solid var(--onair); box-shadow: 6px 6px 0 rgba(0, 0, 0, .28); padding: 8px 26px 10px 16px; transform: skewX(-8deg); animation: telop 1.4s both; }
+.telop-in small { font-size: 12px; font-weight: 900; letter-spacing: .2em; color: var(--marker); }
+.telop-in b { font-size: 32px; font-weight: 900; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; }
+.telop-in span { font-size: 17px; font-weight: 900; }
+.telop.is-turn b { box-shadow: inset 0 -9px 0 var(--pc); padding: 0 4px; }
+.telop.is-stop .telop-in { background: var(--onair); border-left-color: var(--ink); animation-duration: 1.5s; }
+.telop.is-goal .telop-in { background: var(--marker); color: var(--ink); animation-duration: 2.2s; }
+.telop.is-goal .telop-in small, .telop.is-drink .telop-in small { color: var(--onair); }
+.telop.is-drink .telop-in { background: var(--amber); color: var(--ink); border-left-color: var(--ink); animation-duration: 1.3s; }
+@keyframes telop {
+  0% { transform: translateX(-120vw) skewX(-8deg); animation-timing-function: cubic-bezier(.15, .85, .3, 1.12); }
+  22% { transform: translateX(0) skewX(-8deg); }
+  80% { transform: translateX(10px) skewX(-8deg); animation-timing-function: cubic-bezier(.6, 0, .9, .4); }
+  100% { transform: translateX(120vw) skewX(-8deg); }
+}
+.stamp { position: absolute; left: 50%; width: 220px; margin: -110px 0 0 -110px; text-align: center; animation: stamp 1.5s both; }
+.stamp svg { display: block; width: 190px; height: 190px; margin: 0 auto; overflow: visible; }
+.stamp circle, .stamp path { fill: none; stroke: var(--onair); stroke-width: 15; stroke-linecap: round; stroke-dasharray: 100; stroke-dashoffset: 100; animation: draw .34s .05s ease-out forwards; filter: drop-shadow(0 0 0 #fff) drop-shadow(2px 2px 0 #fff) drop-shadow(-2px -2px 0 #fff); }
+.stamp.is-ng path { stroke: var(--ink); animation-duration: .18s; }
+.stamp.is-ng .s2 { animation-delay: .22s; }
+.stamp b { display: inline-block; margin-top: -40px; position: relative; background: var(--white); border: 3px solid var(--ink); box-shadow: 4px 4px 0 var(--ink); padding: 0 16px 2px; font-size: 30px; font-weight: 900; color: var(--onair); transform: rotate(-5deg); }
+.stamp.is-ng b { color: var(--ink); }
+@keyframes draw { to { stroke-dashoffset: 0; } }
+@keyframes stamp {
+  0% { transform: scale(1.7) rotate(-12deg); opacity: 0; animation-timing-function: cubic-bezier(.2, 1.4, .4, 1); }
+  18% { transform: scale(1) rotate(-4deg); opacity: 1; }
+  72% { transform: scale(1) rotate(-4deg); opacity: 1; }
+  100% { transform: scale(.86) rotate(-4deg); opacity: 0; }
+}
+.confetti { position: absolute; inset: 0; }
+.confetti i { position: absolute; top: -24px; border: 1px solid rgba(0, 0, 0, .35); animation: fall var(--t) cubic-bezier(.3, .25, .6, 1) var(--d) both; }
+@keyframes fall { to { transform: translate3d(var(--x), 108vh, 0) rotate(var(--r)); } }
 
-/* ---- 結果 ---- */
-.result { flex: 1; padding: 32px max(16px, env(safe-area-inset-right, 0px)) 16px max(16px, env(safe-area-inset-left, 0px)); text-align: center; display: grid; align-content: start; gap: 8px; }
-.kicker { margin: 0; color: var(--onair); font-weight: 700; letter-spacing: .3em; font-size: 13px; }
-.winner { margin: 4px 0; font-size: 44px; font-weight: 900; line-height: 1.2; background: linear-gradient(transparent 60%, var(--marker) 60%); justify-self: center; padding: 0 8px; }
-.rank { list-style: none; margin: 16px 0 0; padding: 0; border-top: 2px solid var(--ink); text-align: left; }
-.rank li { display: grid; grid-template-columns: 32px 1fr auto; align-items: center; gap: 8px; padding: 12px 8px; border-bottom: 1px solid var(--rule); box-shadow: inset 6px 0 0 var(--pc); padding-left: 16px; }
-.rank .pl { display: block; border: 0; padding: 0; background: none; font-weight: 900; font-size: 20px; }
-.rank .nm { font-weight: 900; font-size: 18px; }
-.rank .ps { font-weight: 700; color: var(--sub); }
+/* ---- 結果発表 ---- */
+.result { background: var(--white); }
+.res-hero { position: relative; overflow: hidden; background: var(--ink); color: var(--white); text-align: center; padding: calc(22px + env(safe-area-inset-top, 0px)) 16px 22px; background-image: radial-gradient(rgba(255, 255, 255, .09) 1.3px, transparent 1.6px); background-size: 10px 10px; }
+.kicker { margin: 0; }
+.kicker span { display: inline-block; background: var(--onair); color: var(--white); font-weight: 900; letter-spacing: .4em; font-size: 15px; padding: 3px 12px 3px 20px; transform: skewX(-8deg); }
+.res-castle { position: absolute; left: 50%; bottom: -6px; width: 330px; margin-left: -165px; opacity: .2; }
+.champ { position: relative; width: 96px; margin: 40px auto 0; }
+.champ .pawn { width: 96px; height: auto; }
+.crown { position: absolute; left: 20px; top: -30px; width: 56px; transform: rotate(-7deg); }
+.winner { position: relative; margin: 10px 0 0; font-size: clamp(34px, 11vw, 46px); font-weight: 900; line-height: 1.25; }
+.winner span { display: inline-block; background: var(--marker); color: var(--ink); padding: 0 16px 3px; transform: skewX(-8deg); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.win-sub { position: relative; margin: 10px 0 0; font-weight: 900; font-size: 16px; color: var(--marker); }
+#app.is-fresh .champ { animation: champIn .7s 1.2s var(--pop) backwards; }
+#app.is-fresh .crown { animation: crownIn .5s 1.75s var(--pop) backwards; }
+#app.is-fresh .winner span { animation: winIn .45s 1.45s var(--pop) backwards; }
+#app.is-fresh .win-sub { animation: fade .4s 1.9s backwards; }
+#app.is-fresh .kicker span { animation: winIn .4s .1s var(--pop) backwards; }
+@keyframes champIn { from { transform: translateY(60px) scale(.3); opacity: 0; } }
+@keyframes crownIn { from { transform: translateY(-50px) rotate(30deg); opacity: 0; } }
+@keyframes winIn { from { transform: skewX(-8deg) scale(.3); opacity: 0; } }
+.rank { list-style: none; margin: 0; padding: 0; text-align: left; }
+.rank li { display: grid; grid-template-columns: 46px 30px minmax(0, 1fr) auto; align-items: center; gap: 4px 10px; padding: 10px var(--pad-r) 12px var(--pad-l); border-bottom: 1px solid var(--rule); }
+.rank .rk { font-weight: 900; font-size: 28px; line-height: 1; font-variant-numeric: tabular-nums; }
+.rank .rk small { font-size: 12px; margin-left: 1px; }
+.rank li:first-child .rk { color: var(--onair); }
+.rank .mini-pawn { grid-row: span 2; }
+.rank .rk { grid-row: span 2; }
+.rank .nm { font-weight: 900; font-size: 19px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rank .ps { font-weight: 900; font-size: 15px; font-variant-numeric: tabular-nums; }
+.rank .bar-t { grid-column: 3 / -1; height: 10px; border: 2px solid var(--ink); border-radius: 5px; overflow: hidden; background: var(--white); }
+.rank .bar-t i { display: block; height: 100%; width: calc(var(--at) * 100%); background: var(--pc); border-right: 2px solid var(--ink); }
+#app.is-fresh .rank li { animation: actIn .4s calc(2s + var(--i) * .12s) var(--out) backwards; }
+#app.is-fresh .rank .bar-t i { animation: grow .7s calc(2.2s + var(--i) * .12s) var(--out) backwards; }
+@keyframes grow { from { width: 0; } }
+.result > .sub { padding: 14px 0 20px; }
 
-@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
-@media (min-width: 600px) { #app { max-width: 520px; margin: 0 auto; background: var(--paper); box-shadow: 0 0 0 1px var(--rule); } }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+  .ds-call { transform: skewX(-8deg); opacity: 1; }
+  .dstage { background: rgba(20, 20, 20, .34); }
+  .stamp circle, .stamp path { stroke-dashoffset: 0; }
+  .telop-in { transform: skewX(-8deg); }
+}
+@media (max-height: 620px) {
+  .act { min-height: calc(170px + env(safe-area-inset-bottom, 0px)); gap: 8px; }
+  .big { min-height: 54px; }
+  .turn-row { min-height: 72px; }
+}
+@media (min-width: 600px) { #app { max-width: 520px; margin: 0 auto; } }
 
 </style>
 </head>
@@ -389,16 +663,18 @@ button:disabled { opacity: .35; cursor: default; }
 })();
 
 // すごろくクイズ（スマホ1台を回して遊ぶ版）
-// 流れ: サイコロ → 駒が1マスずつ進む → 止まったマスの問題 → 正解ならそこに残る／不正解なら元の場所へ
+// 流れ: サイコロ → 駒が1マスずつ跳ねて進む → 止まったマスの問題 → 正解ならそこに残る／不正解なら元の場所へ
 (function () {
   const DB = window.QUIZ_DB.questions;
   const QMAP = new Map(DB.map(q => [q.id, q]));
   const STORE_KEY = 'sugoroku-quiz.v2';
   const COLORS = ['#D83A3A', '#1F5FD1', '#14915A', '#E0A100', '#7B3FB8', '#E0598B'];
+  // [名前, 絵文字, マスの色]
   const GENRES = {
-    entertainment: ['エンタメ', '🎬'], sports: ['スポーツ', '⚽'], food: ['グルメ', '🍜'], geography: ['地理', '🗾'],
-    history: ['歴史', '🏯'], kanji_words: ['漢字', '✒️'], science_numbers: ['理科', '🔬'], life_brand: ['生活', '🛍️'],
-    trend_news: ['流行', '📱'], riddle: ['ひらめき', '💡'], spi: ['SPI', '🧮'],
+    entertainment: ['エンタメ', '🎬', '#E8457C'], sports: ['スポーツ', '⚽', '#1E88D2'], food: ['グルメ', '🍜', '#F07F1B'],
+    geography: ['地理', '🗾', '#1FA06A'], history: ['歴史', '🏯', '#8B5E3C'], kanji_words: ['漢字', '✒️', '#2F3E8F'],
+    science_numbers: ['理科', '🔬', '#12A3A8'], life_brand: ['生活', '🛍️', '#C24FB0'], trend_news: ['流行', '📱', '#7DB312'],
+    riddle: ['ひらめき', '💡', '#8E63D8'], spi: ['SPI', '🧮', '#5D7380'],
   };
   const EVENTS = {
     fwd2: { label: '追い風', icon: '🍃', text: '追い風！ 2マス進む' },
@@ -415,18 +691,21 @@ button:disabled { opacity: .35; cursor: default; }
   const STOPS = ['関所', '峠', '城門'];
   // 地図の地域（下のスタートから上のゴールへ）
   const REGIONS = [
-    { key: 'meadow', name: 'はじまりの草原', bg: '#DCEBC4' },
-    { key: 'forest', name: '迷いの森', bg: '#B9D6A0' },
-    { key: 'river', name: '大河', bg: '#CFE3EC' },
-    { key: 'town', name: '宿場町', bg: '#EFE3C8' },
-    { key: 'mountain', name: '険しい山', bg: '#D9D8CF' },
-    { key: 'castle', name: 'ゴールの城', bg: '#E9E1EE' },
+    { key: 'meadow', name: 'はじまりの草原', bg: '#CBE2A0' },
+    { key: 'forest', name: '迷いの森', bg: '#9CC47F' },
+    { key: 'river', name: '大河', bg: '#BBD796' },
+    { key: 'town', name: '宿場町', bg: '#E6D5A8' },
+    { key: 'mountain', name: '険しい山', bg: '#C9C2B2' },
+    { key: 'castle', name: 'ゴールの城', bg: '#E4DFCF' },
   ];
   // 難しさは想定正答率で選ぶ（DB の目盛り v5。ふつう＝Lv3 前後）
   const LEVEL_TARGET = { easy: 0.68, normal: 0.58, hard: 0.48 };
-  const STEP_MS = 260;
-  const MAP_W = 360, DY = 76, PAD_Y = 70;
+  const MAP_W = 360, DY = 78, PAD_T = 204, PAD_B = 136;
+  const INK = '#141414';
   const app = document.getElementById('app');
+  const RM = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  // 動作確認用: ?speed=3 でアニメーションを早送り
+  const SPEED = Math.max(0.25, Number(new URLSearchParams(location.search).get('speed')) || 1);
 
   // ---------- 状態 ----------
   function defaultState() {
@@ -447,12 +726,63 @@ button:disabled { opacity: .35; cursor: default; }
   const nl = s => esc(s).replace(/\n/g, '<br>');
   const rnd = n => Math.floor(Math.random() * n);
   const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = rnd(i + 1); [a[i], a[j]] = [a[j], a[i]]; } return a; };
-  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  const sleep = ms => new Promise(r => setTimeout(r, ms / SPEED));
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const lerp = (a, b, t) => a + (b - a) * t;
+  const f1 = n => Math.round(n * 10) / 10;
+  // 0→1 を dur ミリ秒かけて fn に渡す
+  function animate(dur, fn) {
+    dur /= SPEED;
+    return new Promise(res => {
+      const t0 = performance.now();
+      const tick = now => { const t = clamp((now - t0) / dur, 0, 1); fn(t); if (t < 1) requestAnimationFrame(tick); else res(); };
+      requestAnimationFrame(tick);
+    });
+  }
 
+  // ---------- 音 ----------
+  // 駒やサイコロの「コトッ」という木の音はここで鳴らす（出題・正解などは共通の Sound を使う）
+  const Sfx = (() => {
+    let ctx = null;
+    function unlock() {
+      try {
+        if (!ctx) { const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return; ctx = new AC(); }
+        if (ctx.state === 'suspended') ctx.resume();
+      } catch (e) { /* 音が出せない環境 */ }
+    }
+    function knock(t, freq, gain, dur) {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = 'sine'; o.frequency.setValueAtTime(freq, t); o.frequency.exponentialRampToValueAtTime(freq * 0.55, t + dur);
+      g.gain.setValueAtTime(gain, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+      o.connect(g).connect(ctx.destination); o.start(t); o.stop(t + dur + 0.02);
+    }
+    function click(t, freq, gain) {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = 'triangle'; o.frequency.setValueAtTime(freq, t);
+      g.gain.setValueAtTime(gain, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.03);
+      o.connect(g).connect(ctx.destination); o.start(t); o.stop(t + 0.05);
+    }
+    const SE = {
+      hop(t) { knock(t, 520, 0.16, 0.06); click(t, 1700, 0.05); },
+      land(t) { knock(t, 300, 0.32, 0.13); click(t, 1300, 0.08); },
+      back(t) { knock(t, 360, 0.12, 0.06); },
+      die(t) { click(t, 2400, 0.12); knock(t, 760, 0.16, 0.04); },
+      set(t) { knock(t, 220, 0.34, 0.14); click(t, 1900, 0.1); },
+      pop(t) { knock(t, 880, 0.14, 0.05); knock(t + 0.07, 1320, 0.14, 0.09); },
+      gate(t) { knock(t, 150, 0.4, 0.16); knock(t + 0.14, 120, 0.36, 0.2); },
+      tap(t) { click(t, 1500, 0.05); },
+    };
+    function play(name) {
+      if (!ctx || ctx.state !== 'running' || !SE[name]) return;
+      try { SE[name](ctx.currentTime + 0.005); } catch (e) { /* 鳴らせなくても進行は止めない */ }
+    }
+    return { unlock, play };
+  })();
   function sound(name) { if (state.setup.sound) Sound.play(name); }
+  function sfx(name) { if (state.setup.sound) Sfx.play(name); }
   function buzz(ms) { try { navigator.vibrate && navigator.vibrate(ms); } catch (e) { /* 非対応 */ } }
 
-  // ---------- 盤面（マスの並びと地図） ----------
+  // ---------- 盤面（マスの並び） ----------
   function makeBoard(len, drinks, ng) {
     const genres = shuffle(Object.keys(GENRES).filter(g => !ng.includes(g) && g !== 'spi')).slice(0, 6);
     const cells = Array.from({ length: len + 1 }, () => null);
@@ -484,105 +814,361 @@ button:disabled { opacity: .35; cursor: default; }
     }
     let gi = 0;
     for (let i = 1; i < len; i++) if (!cells[i]) cells[i] = { t: 'genre', g: genres[gi++ % genres.length] };
-
-    // 道のりの座標: 下（スタート）から上（ゴール）へ、左右に蛇行しながら登る
-    const H = PAD_Y * 2 + len * DY;
-    const phase = Math.random() * Math.PI;
-    const nodes = cells.map((_, i) => ({
-      x: Math.round(MAP_W / 2 + 112 * Math.sin(i * 0.62 + phase)),
-      y: Math.round(H - PAD_Y - i * DY),
-    }));
-    return { cells, len, genres, nodes, H, seed: Math.floor(Math.random() * 1e9) };
+    return { cells, len, genres, ph: Math.round(Math.random() * 314) / 100, seed: 1 + Math.floor(Math.random() * 1e9) };
   }
 
-  function regionOf(board, i) { return Math.min(REGIONS.length - 1, Math.floor((i / board.len) * REGIONS.length)); }
+  // 道のりの座標（保存はせず、盤面から毎回同じものを作る）: 下のスタートから上のゴールへ蛇行しながら登る
+  const geoCache = new Map();
+  function geo(board) {
+    let g = geoCache.get(board.seed);
+    if (g) return g;
+    const len = board.len, H = PAD_T + PAD_B + len * DY;
+    const ph = board.ph ?? ((board.seed || 1) % 314) / 100;
+    const nodes = board.cells.map((_, i) => ({ x: Math.round(MAP_W / 2 + 106 * Math.sin(i * 0.62 + ph)), y: H - PAD_B - i * DY }));
+    g = { nodes, H, len };
+    geoCache.clear(); geoCache.set(board.seed, g);
+    return g;
+  }
+  // マス i から i+1 へ向かう道（3次ベジェ）の上の点
+  function roadPt(nodes, i, t) {
+    const a = nodes[i], b = nodes[i + 1], my = (a.y + b.y) / 2, u = 1 - t;
+    return {
+      x: u * u * u * a.x + 3 * u * u * t * a.x + 3 * u * t * t * b.x + t * t * t * b.x,
+      y: u * u * u * a.y + 3 * u * u * t * my + 3 * u * t * t * my + t * t * t * b.y,
+    };
+  }
 
   function cellInfo(c) {
-    if (c.t === 'start') return { icon: '🚩', label: 'スタート' };
-    if (c.t === 'goal') return { icon: '🏁', label: 'ゴール' };
-    if (c.t === 'genre') return { icon: GENRES[c.g][1], label: GENRES[c.g][0] };
-    if (c.t === 'challenge') return { icon: '🔥', label: 'チャレンジ' };
-    if (c.t === 'all') return { icon: '📣', label: '全員クイズ' };
-    if (c.t === 'event') return { icon: EVENTS[c.e].icon, label: EVENTS[c.e].label };
-    if (c.t === 'drink') return { icon: DRINKS[c.d].icon, label: DRINKS[c.d].label };
-    return { icon: '🚧', label: c.name };
+    if (c.t === 'start') return { icon: '🚩', label: 'スタート', kind: 'スタート' };
+    if (c.t === 'goal') return { icon: '🏁', label: 'ゴール', kind: 'ゴール' };
+    if (c.t === 'genre') return { icon: GENRES[c.g][1], label: GENRES[c.g][0], kind: 'クイズ' };
+    if (c.t === 'challenge') return { icon: '🔥', label: 'チャレンジ', kind: '正解で＋3マス' };
+    if (c.t === 'all') return { icon: '📣', label: '全員クイズ', kind: '正解者は＋2マス' };
+    if (c.t === 'event') return { icon: EVENTS[c.e].icon, label: EVENTS[c.e].label, kind: 'イベント' };
+    if (c.t === 'drink') return { icon: DRINKS[c.d].icon, label: DRINKS[c.d].label, kind: `飲んだら＋${DRINKS[c.d].bonus}マス` };
+    return { icon: '🚧', label: c.name, kind: '必ず止まる' };
   }
 
-  // 地図の SVG（地域の色帯・川・木・家・山・城・道・マス）
+  // ---------- 絵の部品 ----------
+  // 駒（ボードゲームのポーン）
+  function pawnSVG(color, ch) {
+    return `<svg viewBox="0 0 40 52" class="pawn" aria-hidden="true">
+      <ellipse cx="20" cy="45.5" rx="13.5" ry="5" fill="${color}" stroke="${INK}" stroke-width="2"/>
+      <path d="M7.5 44 C8.5 33 14.5 30 15.5 21 H24.5 C25.5 30 31.5 33 32.5 44 C29 47.6 11 47.6 7.5 44 Z" fill="${color}" stroke="${INK}" stroke-width="2" stroke-linejoin="round"/>
+      <path d="M24.5 22 C25.5 30 31.5 33 32.2 43.6 C30.6 45.2 28 46 25.4 46.4 C26.4 38 22.4 30 21.8 22 Z" fill="#000" opacity=".2"/>
+      <ellipse cx="20" cy="21.5" rx="8" ry="2.7" fill="${color}" stroke="${INK}" stroke-width="2"/>
+      <circle cx="20" cy="11.5" r="9.5" fill="${color}" stroke="${INK}" stroke-width="2"/>
+      <path d="M21 2.6 a9 9 0 0 1 0 17.8 a12 12 0 0 0 0 -17.8Z" fill="#000" opacity=".2"/>
+      <ellipse cx="16" cy="8" rx="3.2" ry="2" fill="#fff" opacity=".75" transform="rotate(-32 16 8)"/>
+      ${ch ? `<text x="19.6" y="41.4" text-anchor="middle" font-size="12" font-weight="900" fill="#fff">${esc(ch)}</text>` : ''}
+    </svg>`;
+  }
+  const poly = (x, y, r, n, rot = 0) => Array.from({ length: n }, (_, i) => { const a = rot + (i / n) * Math.PI * 2; return `${f1(x + r * Math.cos(a))},${f1(y + r * Math.sin(a))}`; }).join(' ');
+  const burst = (x, y, r1, r2, n) => Array.from({ length: n * 2 }, (_, i) => { const a = (i / (n * 2)) * Math.PI * 2 - Math.PI / 2, r = i % 2 ? r2 : r1; return `${f1(x + r * Math.cos(a))},${f1(y + r * Math.sin(a))}`; }).join(' ');
+  // マスのコマ（厚みのあるチップ）。種類ごとに形を変える: ジャンル=丸、チャレンジ=ギザギザ、全員=六角、イベント=ひし形、ストップ=八角
+  function token(c, x, y, r) {
+    const em = (ch, s) => `<text x="${x}" y="${f1(y + s * 0.36)}" font-size="${s}" text-anchor="middle">${ch}</text>`;
+    const info = cellInfo(c);
+    const two = (shape, fill) => `${shape(3, INK, INK)}${shape(0, fill, INK)}`;
+    if (c.t === 'genre') {
+      const col = GENRES[c.g][2];
+      return two((dy, fl, st) => `<circle cx="${x}" cy="${y + dy}" r="${r}" fill="${fl}" stroke="${st}" stroke-width="2"/>`, col)
+        + `<circle cx="${x}" cy="${y}" r="${r - 4.4}" fill="#fff"/>${em(info.icon, r * 0.92)}`;
+    }
+    if (c.t === 'challenge') {
+      return two((dy, fl, st) => `<polygon points="${burst(x, y + dy, r + 4, r - 1.5, 12)}" fill="${fl}" stroke="${st}" stroke-width="2" stroke-linejoin="round"/>`, '#E60012')
+        + `<circle cx="${x}" cy="${y}" r="${r - 5.5}" fill="#fff"/>${em('🔥', r * 0.9)}`;
+    }
+    if (c.t === 'all') {
+      return two((dy, fl, st) => `<polygon points="${poly(x, y + dy, r + 2.5, 6, Math.PI / 6)}" fill="${fl}" stroke="${st}" stroke-width="2" stroke-linejoin="round"/>`, '#FFE14D')
+        + `<polygon points="${poly(x, y, r - 3, 6, Math.PI / 6)}" fill="none" stroke="${INK}" stroke-width="1" stroke-dasharray="2 2.5"/>${em('📣', r * 0.9)}`;
+    }
+    if (c.t === 'event') {
+      return two((dy, fl, st) => `<polygon points="${poly(x, y + dy, r + 3.5, 4, 0)}" fill="${fl}" stroke="${st}" stroke-width="2" stroke-linejoin="round"/>`, '#FFFFFF')
+        + `<polygon points="${poly(x, y, r - 2, 4, 0)}" fill="none" stroke="${INK}" stroke-width="1"/>${em(info.icon, r * 0.8)}`;
+    }
+    if (c.t === 'drink') {
+      return two((dy, fl, st) => `<circle cx="${x}" cy="${y + dy}" r="${r + 1}" fill="${fl}" stroke="${st}" stroke-width="2"/>`, '#F4B32C')
+        + `<circle cx="${x}" cy="${y}" r="${r - 3.5}" fill="#FFF6DC" stroke="${INK}" stroke-width="1" stroke-dasharray="1.5 2.5"/>${em(info.icon, r * 0.9)}`;
+    }
+    if (c.t === 'stop') {
+      return two((dy, fl, st) => `<polygon points="${poly(x, y + dy, r + 2.5, 8, Math.PI / 8)}" fill="${fl}" stroke="${st}" stroke-width="2" stroke-linejoin="round"/>`, '#E60012')
+        + `<polygon points="${poly(x, y, r - 1.5, 8, Math.PI / 8)}" fill="none" stroke="#fff" stroke-width="1.6"/>`
+        + `<text x="${x}" y="${f1(y + r * 0.34)}" font-size="${f1(r * 0.95)}" font-weight="900" fill="#fff" text-anchor="middle">止</text>`;
+    }
+    // スタート・ゴール: 黒い角マス
+    const s = r + 1;
+    return two((dy, fl, st) => `<rect x="${x - s}" y="${y - s + dy}" width="${s * 2}" height="${s * 2}" rx="5" fill="${fl}" stroke="${st}" stroke-width="2"/>`, c.t === 'goal' ? '#FFE14D' : INK)
+      + (c.t === 'goal'
+        ? `<path d="M${x - s + 3} ${y - s + 3}h${s - 3}v${s - 3}h-${s - 3}z M${x} ${y}h${s - 3}v${s - 3}h-${s - 3}z" fill="${INK}"/>`
+        : `<text x="${x}" y="${y + 4.4}" font-size="11" font-weight="900" fill="#fff" text-anchor="middle" letter-spacing=".5">GO!</text>`);
+  }
+  const tokenIcon = (c, cls = '') => `<svg class="tok ${cls}" viewBox="-25 -25 50 54" aria-hidden="true">${token(c, 0, 0, 18)}</svg>`;
+
+  // 城（天守）。cx=中心、by=石垣の下端
+  function castleSVG(cx, by) {
+    const W = '#F7F4EC', RF = '#46565F', RS = '#1E272C', ST = '#B4AFA2';
+    const roof = (hw, y, h, lift) => `<path d="M${cx - hw - 7} ${y} Q${cx - hw + 2} ${y - h * 0.3} ${cx - hw + 9} ${y - h} H${cx + hw - 9} Q${cx + hw - 2} ${y - h * 0.3} ${cx + hw + 7} ${y} Q${cx} ${y - lift} ${cx - hw - 7} ${y} Z" fill="${RF}" stroke="${RS}" stroke-width="1.4" stroke-linejoin="round"/>`;
+    const wall = (hw, y, h) => `<rect x="${cx - hw}" y="${y - h}" width="${hw * 2}" height="${h}" fill="${W}" stroke="${RS}" stroke-width="1.4"/>`;
+    const win = (x, y) => `<rect x="${cx + x - 2.5}" y="${y}" width="5" height="6" fill="${RS}"/>`;
+    return `<g>
+      <ellipse cx="${cx}" cy="${by + 2}" rx="64" ry="7" fill="#000" opacity=".12"/>
+      <path d="M${cx - 96} ${by - 2} v-13 h44 v13 Z M${cx + 52} ${by - 2} v-13 h44 v13 Z" fill="${W}" stroke="${RS}" stroke-width="1.2"/>
+      <path d="M${cx - 99} ${by - 15} h50 l-3 -5 h-44 Z M${cx + 49} ${by - 15} h50 l-3 -5 h-44 Z" fill="${RF}" stroke="${RS}" stroke-width="1.2"/>
+      <path d="M${cx - 54} ${by} L${cx - 43} ${by - 32} H${cx + 43} L${cx + 54} ${by} Z" fill="${ST}" stroke="#4A463E" stroke-width="1.5" stroke-linejoin="round"/>
+      <path d="M${cx - 49} ${by - 10} h20 m6 0 h28 m7 0 h30 M${cx - 45} ${by - 21} h14 m7 0 h24 m6 0 h31 M${cx - 30} ${by - 10} v-11 M${cx + 6} ${by - 10} v-11 M${cx + 30} ${by} v-10 M${cx - 12} ${by} v-10 M${cx + 22} ${by - 21} v-11 M${cx - 22} ${by - 21} v-11" stroke="#4A463E" stroke-width="1" opacity=".55" fill="none"/>
+      <path d="M${cx - 9} ${by} v-15 a9 9 0 0 1 18 0 v15 Z" fill="#3A2A1C" stroke="${RS}" stroke-width="1.2"/>
+      ${wall(35, by - 32, 20)}${win(-22, by - 46)}${win(-8, by - 46)}${win(8, by - 46)}${win(22, by - 46)}
+      ${roof(37, by - 50, 13, 7)}
+      <path d="M${cx - 11} ${by - 60} L${cx} ${by - 72} L${cx + 11} ${by - 60} Z" fill="${W}" stroke="${RS}" stroke-width="1.3" stroke-linejoin="round"/>
+      ${wall(25, by - 63, 16)}${win(-13, by - 75)}${win(0, by - 75)}${win(13, by - 75)}
+      ${roof(27, by - 78, 12, 6)}
+      ${wall(15, by - 90, 13)}${win(-6, by - 100)}${win(6, by - 100)}
+      <path d="M${cx - 25} ${by - 102} Q${cx - 12} ${by - 108} ${cx} ${by - 124} Q${cx + 12} ${by - 108} ${cx + 25} ${by - 102} Q${cx} ${by - 108} ${cx - 25} ${by - 102} Z" fill="${RF}" stroke="${RS}" stroke-width="1.4" stroke-linejoin="round"/>
+      <path d="M${cx - 6} ${by - 119} q-4 -5 -1 -8 M${cx + 6} ${by - 119} q4 -5 1 -8" stroke="#D9A400" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+    </g>`;
+  }
+
+  // サイコロ（CSS の立方体）。1 の目は赤
+  const PIPS = { 1: [4], 2: [0, 8], 3: [0, 4, 8], 4: [0, 2, 6, 8], 5: [0, 2, 4, 6, 8], 6: [0, 2, 3, 5, 6, 8] };
+  const SHOW = { 1: [0, 0], 2: [90, 0], 3: [0, -90], 4: [0, 90], 5: [-90, 0], 6: [0, 180] };
+  const faceHTML = n => `<div class="f f${n}">${Array.from({ length: 9 }, (_, i) => `<i${PIPS[n].includes(i) ? ' class="p"' : ''}></i>`).join('')}</div>`;
+  const dieHTML = (cls = '') => `<div class="die ${cls}"><div class="cube">${[1, 2, 3, 4, 5, 6].map(faceHTML).join('')}</div><div class="shade"><i class="sf"></i><i class="st"></i><i class="sr"></i></div></div>`;
+  const flatDie = n => `<span class="die2d">${faceHTML(n)}</span>`;
+
+  // ---------- 地図の SVG ----------
   function mapSVG(board) {
-    let seed = board.seed;
+    const { nodes, H, len } = geo(board);
+    let seed = board.seed || 1;
     const rand = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
-    const { nodes, H, len } = board;
-    const bandY = r => H - PAD_Y - (r / REGIONS.length) * len * DY;
-    const nearRoad = (x, y, d) => nodes.some(n => Math.hypot(n.x - x, n.y - y) < d);
-    let out = '';
-    // 地域の色帯
-    REGIONS.forEach((rg, r) => {
-      const y1 = r === REGIONS.length - 1 ? 0 : bandY(r + 1);
-      const y0 = r === 0 ? H : bandY(r);
-      out += `<rect x="0" y="${y1}" width="${MAP_W}" height="${y0 - y1}" fill="${rg.bg}"/>`;
-      out += `<text x="10" y="${y0 - 10}" class="rg">${rg.name}</text>`;
-    });
-    // 川（大河の帯を横切る）
-    const ry = (bandY(2) + bandY(3)) / 2;
-    out += `<path d="M0 ${ry - 6} C 90 ${ry - 26}, 180 ${ry + 18}, ${MAP_W} ${ry - 8} L ${MAP_W} ${ry + 26} C 180 ${ry + 50}, 90 ${ry + 8}, 0 ${ry + 30} Z" fill="#7FB6D5"/>`;
-    for (let i = 0; i < 6; i++) { const x = 20 + rand() * (MAP_W - 40), y = ry + 4 + rand() * 18; out += `<path d="M${x} ${y} q 5 -4 10 0 t 10 0" stroke="#E8F4FA" stroke-width="1.5" fill="none"/>`; }
-    // 飾り（道から離して置く）
-    const place = (r, n, draw, dist = 34) => {
-      for (let i = 0, tries = 0; i < n && tries < n * 30; tries++) {
-        const y = bandY(r + 1) + 16 + rand() * (bandY(r) - bandY(r + 1) - 24), x = 14 + rand() * (MAP_W - 28);
-        if (nearRoad(x, y, dist) || Math.abs(y - ry) < 30) continue;
-        out += draw(x, y); i++;
+    const R = (a, b) => a + rand() * (b - a);
+    const pick = a => a[Math.floor(rand() * a.length)];
+    const density = len / 20;
+    const bandY = r => (r <= 0 ? H : r >= 6 ? 0 : H - PAD_B - (r * len / 6) * DY + DY / 2);
+    // 道の点列（飾りを道から離すのに使う）
+    const road = [];
+    for (let i = 0; i < len; i++) for (let t = 0; t < 1; t += 0.2) road.push(roadPt(nodes, i, t));
+    road.push(nodes[len]);
+    const roadX = y => road.reduce((a, b) => (Math.abs(b.y - y) < Math.abs(a.y - y) ? b : a)).x;
+    const hitRoad = (x, y, d) => road.some(p => (p.x - x) ** 2 + (p.y - y) ** 2 < d * d);
+    const labelW = i => { const s = cellInfo(board.cells[i]).label; return 20 + s.length * 11.5; };
+    const labels = nodes.map((n, i) => (n.x < MAP_W / 2 ? { x0: n.x + 14, x1: n.x + 24 + labelW(i), y: n.y } : { x0: n.x - 24 - labelW(i), x1: n.x - 14, y: n.y }));
+    const hitLabel = (x, y, rad, h) => labels.some(L => y > L.y - 12 && y - h < L.y + 10 && x > L.x0 - rad && x < L.x1 + rad);
+    // 大河
+    const ry0 = (bandY(2) + bandY(3)) / 2, rk = R(0, 6);
+    const riverY = x => ry0 + 11 * Math.sin(x / 62 + rk);
+    const nearRiver = (x, y, m) => Math.abs(y - riverY(x)) < 33 + m;
+    const taken = [];
+    const free = (x, y, rad, h = 0) => x > rad * 0.6 && x < MAP_W - rad * 0.6
+      && !hitRoad(x, y, rad + 15) && !(h > 14 && hitRoad(x, y - h * 0.6, rad + 13))
+      && !hitLabel(x, y, rad, h) && !nearRiver(x, y, rad * 0.5)
+      && !taken.some(o => (o.x - x) ** 2 + (o.y - y) ** 2 < (o.r + rad) ** 2);
+    const objs = []; // 立っているもの（下にあるほど手前）
+    let ground = ''; // 地面に貼りつくもの
+    const place = (r, n, rad, h, draw, opt = {}) => {
+      n = Math.round(n * density);
+      const y1 = bandY(r + 1) + (r === 5 ? PAD_T - 40 : 10) + h * 0.5, y0 = bandY(r) - 8;
+      for (let i = 0, tries = 0; i < n && tries < n * 40; tries++) {
+        const x = opt.edge ? (rand() < 0.5 ? R(8, 70) : R(MAP_W - 70, MAP_W - 8)) : R(8, MAP_W - 8), y = R(y1, y0);
+        if (!free(x, y, rad, h)) continue;
+        taken.push({ x, y, r: rad * (opt.pack || 1) });
+        if (opt.flat) ground += draw(f1(x), f1(y)); else objs.push({ y, s: draw(f1(x), f1(y)) });
+        i++;
       }
     };
-    const flower = (x, y) => `<circle cx="${x}" cy="${y}" r="2.6" fill="${['#F5D33D', '#F08BA0', '#FFFFFF'][Math.floor(rand() * 3)]}"/>`;
-    const tuft = (x, y) => `<path d="M${x - 5} ${y} l3 -7 l2 7 l3 -8 l2 8" stroke="#7FA75A" stroke-width="1.6" fill="none"/>`;
-    const tree = (x, y) => `<rect x="${x - 2}" y="${y}" width="4" height="8" fill="#7A5534"/><path d="M${x} ${y - 20} L${x + 11} ${y + 1} L${x - 11} ${y + 1} Z" fill="${rand() < 0.5 ? '#3E7D3A' : '#4F8F45'}"/>`;
-    const house = (x, y) => { const c = ['#C0574A', '#4C6B9A', '#6B5A45'][Math.floor(rand() * 3)]; return `<rect x="${x - 9}" y="${y - 6}" width="18" height="13" fill="#F7F1E3" stroke="#6B5A45" stroke-width="1"/><path d="M${x - 12} ${y - 5} L${x} ${y - 16} L${x + 12} ${y - 5} Z" fill="${c}"/><rect x="${x - 2}" y="${y}" width="4" height="7" fill="#6B5A45"/>`; };
-    const mountain = (x, y) => { const w = 22 + rand() * 18, h = w * 0.9; return `<path d="M${x - w} ${y + 6} L${x} ${y - h} L${x + w} ${y + 6} Z" fill="#8C8C84"/><path d="M${x - w * 0.32} ${y - h * 0.62} L${x} ${y - h} L${x + w * 0.32} ${y - h * 0.62} L${x + w * 0.12} ${y - h * 0.55} L${x - w * 0.1} ${y - h * 0.66} Z" fill="#FFFFFF"/>`; };
-    place(0, 18, flower, 24); place(0, 10, tuft, 26);
-    place(1, 16, tree);
-    place(2, 4, tree);
-    place(3, 9, house);
-    place(4, 7, mountain, 40);
-    // 城（ゴールの奥）
-    const g = nodes[len];
-    const cx = g.x < MAP_W / 2 ? g.x + 78 : g.x - 78, cy = g.y - 6;
-    out += `<g class="castle"><rect x="${cx - 26}" y="${cy - 8}" width="52" height="26" fill="#F3EFE6" stroke="#3A3A3A" stroke-width="1.5"/>
-      <path d="M${cx - 34} ${cy - 8} L${cx} ${cy - 30} L${cx + 34} ${cy - 8} Z" fill="#3A3A3A"/>
-      <rect x="${cx - 16}" y="${cy - 44}" width="32" height="16" fill="#F3EFE6" stroke="#3A3A3A" stroke-width="1.5"/>
-      <path d="M${cx - 22} ${cy - 44} L${cx} ${cy - 60} L${cx + 22} ${cy - 44} Z" fill="#3A3A3A"/>
-      <rect x="${cx - 5}" y="${cy + 4}" width="10" height="14" fill="#3A3A3A"/></g>`;
-    // 道（マスを結ぶなめらかな曲線）
+    const U = (id, x, y, s = 1, flip = false) => `<use href="#${id}" transform="translate(${x} ${y}) scale(${flip ? -s : s} ${s})"/>`;
+
+    let out = `<defs>
+      <pattern id="m-dot" width="7" height="7" patternUnits="userSpaceOnUse"><circle cx="1.5" cy="1.5" r=".7" fill="#000" opacity=".05"/></pattern>
+      <pattern id="m-paddy" width="6" height="5" patternUnits="userSpaceOnUse"><rect width="6" height="5" fill="#B9D98A"/><path d="M1.5 4 v-2.6 M4.5 4.6 v-2.6" stroke="#6FA04B" stroke-width="1"/></pattern>
+      <pattern id="m-stripe" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="8" height="8" fill="#fff"/><rect width="4" height="8" fill="#E60012"/></pattern>
+      <g id="t-pine"><ellipse cy="1" rx="9" ry="3" opacity=".14"/><rect x="-1.6" y="-6" width="3.2" height="7" fill="#6B4A2B"/><path d="M0 -33 L8 -19 H4.5 L11 -8 H-11 L-4.5 -19 H-8 Z" fill="#33734A"/><path d="M0 -33 L8 -19 H4.5 L11 -8 H0 Z" fill="#255A38"/></g>
+      <g id="t-cedar"><ellipse cy="1" rx="7" ry="2.6" opacity=".14"/><rect x="-1.4" y="-5" width="2.8" height="6" fill="#6B4A2B"/><path d="M0 -38 Q9 -18 7 -6 H-7 Q-9 -18 0 -38Z" fill="#2B6A4B"/><path d="M0 -38 Q9 -18 7 -6 H0Z" fill="#1F5139"/></g>
+      <g id="t-oak"><ellipse cy="1" rx="11" ry="3.2" opacity=".14"/><rect x="-2" y="-10" width="4" height="11" fill="#7A5534"/><circle cy="-19" r="11" fill="#63A64C"/><circle cx="-6" cy="-14" r="7" fill="#63A64C"/><circle cx="6.5" cy="-14" r="7.5" fill="#4C8C3E"/><circle cx="-3.5" cy="-22" r="4.2" fill="#86C267"/></g>
+      <g id="t-sakura"><ellipse cy="1" rx="11" ry="3.2" opacity=".14"/><path d="M-1.6 1 L-1 -10 L-5 -15 M1.6 1 L1 -10 L5 -14" stroke="#5E4030" stroke-width="2.4" fill="none"/><circle cy="-20" r="10.5" fill="#F6B4C9"/><circle cx="-7" cy="-14" r="6.5" fill="#F6B4C9"/><circle cx="7" cy="-15" r="7" fill="#EE95B3"/><circle cx="-3" cy="-23" r="4" fill="#FCDCE6"/></g>
+      <g id="t-bush"><ellipse cy="1" rx="8" ry="2.4" opacity=".14"/><circle cx="-4" cy="-3" r="5" fill="#5C9E48"/><circle cx="3" cy="-4" r="6" fill="#6DB055"/></g>
+      <g id="h-a"><ellipse cy="1.5" rx="15" ry="3" opacity=".14"/><rect x="-11" y="-11" width="22" height="12" fill="#F6F1E4" stroke="#3E3226" stroke-width="1"/><path d="M-11 -4 h22" stroke="#3E3226" stroke-width="3.4" opacity=".75"/><rect x="-3" y="-6.5" width="6" height="7.5" fill="#7A5534"/><path d="M-15 -10 L-9 -20 H9 L15 -10 Z" fill="#4B5861" stroke="#232B30" stroke-width="1" stroke-linejoin="round"/><path d="M-9 -20 H9" stroke="#232B30" stroke-width="2.2" stroke-linecap="round"/></g>
+      <g id="h-b"><ellipse cy="1.5" rx="16" ry="3" opacity=".14"/><rect x="-12" y="-10" width="24" height="11" fill="#C79A63" stroke="#3E3226" stroke-width="1"/><path d="M-8 -9 v9 M-4 -9 v9 M8 -9 v9 M4 -9 v9" stroke="#8C6638" stroke-width="1"/><rect x="-3.5" y="-9" width="7" height="4.5" fill="#E60012"/><rect x="-3.5" y="-4.5" width="7" height="5.5" fill="#3A2A1C"/><path d="M-16 -9 L-10 -18 H10 L16 -9 Z" fill="#6A6F58" stroke="#2C3024" stroke-width="1" stroke-linejoin="round"/></g>
+      <g id="h-c"><ellipse cy="1.5" rx="11" ry="2.6" opacity=".14"/><rect x="-8" y="-18" width="16" height="19" fill="#FBF8F0" stroke="#232B30" stroke-width="1"/><rect x="-8" y="-5" width="16" height="6" fill="#39424A"/><rect x="-2" y="-14" width="4" height="5" fill="#232B30"/><path d="M-11 -17 L0 -27 L11 -17 Z" fill="#39424A" stroke="#232B30" stroke-width="1" stroke-linejoin="round"/></g>
+      <g id="rock"><path d="M-7 1 L-5 -5 L1 -8 L7 -3 L8 1 Z" fill="#9B978C" stroke="#5F5B52" stroke-width="1" stroke-linejoin="round"/><path d="M1 -8 L7 -3 L8 1 H2 Z" fill="#7F7B71"/></g>
+      <g id="tuft"><path d="M-5 0 l2.5 -7 l2 6 l2.5 -8 l2 9" stroke="#6E9E4C" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></g>
+      <g id="flw"><circle cx="-3" r="1.9" fill="#fff"/><circle cx="2.5" cy="-2.5" r="1.9" fill="#F7D441"/><circle cx="3" cy="2.5" r="1.9" fill="#F08BA0"/></g>
+      <g id="reed"><path d="M-3 0 q-1 -8 -3 -11 M0 0 v-13 M3 0 q1 -7 4 -10" stroke="#5F8F45" stroke-width="1.4" fill="none" stroke-linecap="round"/><path d="M0 -13 v-4" stroke="#7A5534" stroke-width="2.4" stroke-linecap="round"/></g>
+      <g id="lantern"><rect x="-1.2" y="-9" width="2.4" height="10" fill="#77736A"/><rect x="-3.5" y="-15" width="7" height="6" fill="#F7E7A6" stroke="#55514A" stroke-width="1"/><path d="M-5.5 -15 L0 -19 L5.5 -15 Z" fill="#55514A"/></g>
+    </defs>`;
+
+    // 地面（地域ごとに色を変え、境目は波打たせる）
+    const edge = (y0, k) => { let s = ''; for (let x = 0; x <= MAP_W; x += 24) s += `${x ? 'L' : 'M'}${x} ${f1(y0 + 6 * Math.sin(x / 38 + k) + 3 * Math.sin(x / 13 + k * 3))}`; return s; };
+    out += `<rect width="${MAP_W}" height="${H}" fill="${REGIONS[5].bg}"/>`;
+    for (let r = 4; r >= 0; r--) {
+      const e = edge(bandY(r + 1), r * 1.7 + rk);
+      out += `<path d="${e} L${MAP_W} ${H} L0 ${H} Z" fill="${REGIONS[r].bg}"/><path d="${e}" fill="none" stroke="#000" stroke-opacity=".13" stroke-width="1.2"/>`;
+    }
+    // 地面の濃淡
+    const patch = (r, n, col) => { for (let i = 0; i < Math.round(n * density); i++) { const x = R(0, MAP_W), y = R(bandY(r + 1) + 26, bandY(r) - 22); out += `<ellipse cx="${f1(x)}" cy="${f1(y)}" rx="${f1(R(28, 60))}" ry="${f1(R(10, 20))}" fill="${col}" opacity=".5"/>`; } };
+    patch(0, 5, '#DAEBB6'); patch(1, 5, '#8AB86F'); patch(3, 4, '#F0E3BE'); patch(4, 4, '#BAB2A0'); patch(5, 2, '#EFEBDD');
+    // 山の等高線
+    for (let i = 0; i < Math.round(5 * density); i++) {
+      const x = R(20, MAP_W - 20), y = R(bandY(5) + 30, bandY(4) - 26), a = R(26, 50);
+      out += `<path d="M${f1(x - a)} ${f1(y)} q${f1(a * 0.5)} ${f1(-a * 0.5)} ${f1(a)} ${f1(-a * 0.2)} t${f1(a)} ${f1(a * 0.25)}" fill="none" stroke="#6F675A" stroke-opacity=".28" stroke-width="1"/>`;
+    }
+    out += `<rect width="${MAP_W}" height="${H}" fill="url(#m-dot)"/>`;
+
+    // 川（砂州 → 水 → 浅瀬 → 流れの筋）
+    let rd = '';
+    for (let x = -12; x <= MAP_W + 12; x += 16) rd += `${x < 0 ? 'M' : 'L'}${x} ${f1(riverY(x))}`;
+    out += `<path d="${rd}" fill="none" stroke="#DCCB96" stroke-width="58" stroke-linejoin="round"/>
+      <path d="${rd}" fill="none" stroke="#4E9CC6" stroke-width="48" stroke-linejoin="round"/>
+      <path d="${rd}" fill="none" stroke="#69B2D8" stroke-width="36" stroke-linejoin="round"/>
+      <path d="${rd}" fill="none" stroke="#E9F6FB" stroke-width="1.6" stroke-dasharray="16 22" stroke-linecap="round" transform="translate(0 -9)" opacity=".9"/>
+      <path d="${rd}" fill="none" stroke="#E9F6FB" stroke-width="1.6" stroke-dasharray="10 26" stroke-dashoffset="14" stroke-linecap="round" transform="translate(0 3)" opacity=".8"/>
+      <path d="${rd}" fill="none" stroke="#E9F6FB" stroke-width="1.6" stroke-dasharray="20 30" stroke-dashoffset="5" stroke-linecap="round" transform="translate(0 13)" opacity=".7"/>`;
+    // 橋の位置（道が川を横切る点）と向き
+    let bridge = null;
+    for (let i = 0; i < len && !bridge; i++) {
+      for (let t = 0; t < 1; t += 0.02) {
+        const p = roadPt(nodes, i, t), q = roadPt(nodes, i, t + 0.02);
+        if ((p.y - riverY(p.x)) * (q.y - riverY(q.x)) <= 0) { bridge = { x: (p.x + q.x) / 2, y: (p.y + q.y) / 2, a: Math.atan2(q.y - p.y, q.x - p.x) * 180 / Math.PI }; break; }
+      }
+    }
+    // 川の岩と小舟
+    for (let i = 0; i < 4; i++) {
+      const x = R(16, MAP_W - 16), y = riverY(x) + R(-14, 14);
+      if (bridge && Math.abs(x - bridge.x) < 50) continue;
+      out += i === 0 ? `<g transform="translate(${f1(x)} ${f1(y)}) rotate(${f1(R(-14, 14))})"><path d="M-13 -3 Q0 3 13 -3 L9 4 H-9 Z" fill="#8C5A2E" stroke="#4A2E16" stroke-width="1" stroke-linejoin="round"/><path d="M-8 -1 H8" stroke="#D9B27A" stroke-width="1.6"/></g>` : U('rock', f1(x), f1(y), R(0.7, 1));
+    }
+
+    // 看板（地域の名前）
+    const sign = (x, y, name) => {
+      const w = name.length * 11.5 + 18;
+      x = clamp(x, w / 2 + 6, MAP_W - w / 2 - 6);
+      taken.push({ x: x - w / 3, y: y - 6, r: 20 }, { x: x + w / 3, y: y - 6, r: 20 }, { x, y: y - 6, r: 20 });
+      objs.push({ y: y + 14, s: `<g><ellipse cx="${x}" cy="${y + 15}" rx="${w * 0.3}" ry="2.6" opacity=".14"/><path d="M${x - w * 0.28} ${y - 2} v17 M${x + w * 0.28} ${y - 2} v17" stroke="#5B3A1E" stroke-width="3" stroke-linecap="round"/>
+        <rect x="${x - w / 2}" y="${y - 19}" width="${w}" height="21" rx="2" fill="#5B3A1E"/><rect x="${x - w / 2 + 1.5}" y="${y - 17.5}" width="${w - 3}" height="16" rx="1" fill="#F2DFB0"/>
+        <path d="M${x - w / 2 + 5} ${y - 6.5} h${w - 10}" stroke="#C9A86C" stroke-width=".8" opacity=".7"/>
+        <text x="${x}" y="${y - 5}" class="sg" text-anchor="middle">${name}</text></g>` });
+    };
+    REGIONS.forEach((rg, r) => {
+      const y = r === 0 ? H - 44 : bandY(r) - 26;
+      const side = roadX(y - 8) < MAP_W / 2 ? MAP_W - 62 : 62;
+      sign(side, y, rg.name);
+    });
+    // 城とそのまわり
+    const gl = nodes[len];
+    const ccx = clamp(gl.x + (gl.x < MAP_W / 2 ? 34 : -34), 108, MAP_W - 108), cby = gl.y - 58;
+    for (let dx = -84; dx <= 84; dx += 28) for (let dy = -100; dy <= 0; dy += 34) taken.push({ x: ccx + dx, y: cby + dy, r: 24 });
+    objs.push({ y: cby, s: castleSVG(ccx, cby) });
+    // スタートの広場（踏み固めた土）と旗
+    const st = nodes[0];
+    out += `<ellipse cx="${st.x}" cy="${st.y + 6}" rx="52" ry="26" fill="#E2C88E" stroke="#7A5C34" stroke-width="2"/><ellipse cx="${st.x}" cy="${st.y + 5}" rx="44" ry="20" fill="#EEDCAE"/>`;
+    const fgx = st.x + (st.x < MAP_W / 2 ? -58 : 58);
+    objs.push({ y: st.y + 12, s: `<g><ellipse cx="${fgx}" cy="${st.y + 13}" rx="7" ry="2.4" opacity=".16"/><path d="M${fgx} ${st.y + 12} v-50" stroke="#4A341F" stroke-width="3" stroke-linecap="round"/><path d="M${fgx + 1.5} ${st.y - 37} h26 l-6 8.5 l6 8.5 h-26 Z" fill="#E60012" stroke="${INK}" stroke-width="1.4" stroke-linejoin="round"/></g>` });
+    taken.push({ x: fgx, y: st.y - 10, r: 22 }, { x: fgx + 16, y: st.y - 30, r: 16 }, { x: st.x, y: st.y + 8, r: 56 });
+
+    // 草原
+    place(0, 3, 13, 30, (x, y) => U('t-oak', x, y, R(0.85, 1.1)));
+    place(0, 3, 9, 8, (x, y) => U('t-bush', x, y, R(0.8, 1.1)));
+    place(0, 1, 16, 30, (x, y) => `<g transform="translate(${x} ${y})"><ellipse cy="1.5" rx="13" ry="3" opacity=".14"/><path d="M-7 1 L-5 -17 H5 L7 1 Z" fill="#F6F1E4" stroke="#3E3226" stroke-width="1" stroke-linejoin="round"/><path d="M-6.5 -17 L0 -24 L6.5 -17 Z" fill="#C0453A" stroke="#3E3226" stroke-width="1" stroke-linejoin="round"/><path d="M0 -19 L-13 -30 M0 -19 L12 -31 M0 -19 L-11 -7 M0 -19 L13 -9" stroke="#3E3226" stroke-width="1.6" stroke-linecap="round"/><circle cy="-19" r="1.8" fill="#3E3226"/></g>`);
+    place(0, 2, 15, 0, (x, y) => `<g transform="translate(${x} ${y})"><ellipse rx="15" ry="7.5" fill="#DCCB96"/><ellipse rx="12.5" ry="5.6" fill="#69B2D8"/><path d="M-6 -1 q3 -2 6 0 M1 2 q3 -2 6 0" stroke="#E9F6FB" stroke-width="1.2" fill="none"/></g>`, { flat: true });
+    place(0, 3, 12, 6, (x, y) => `<path d="M${x - 12} ${y} v-7 M${x} ${y} v-7 M${x + 12} ${y} v-7 M${x - 14} ${y - 5} h28 M${x - 14} ${y - 2} h28" stroke="#8C6A45" stroke-width="1.6" stroke-linecap="round" fill="none"/>`);
+    place(0, 14, 5, 0, (x, y) => U('tuft', x, y), { flat: true });
+    place(0, 13, 5, 0, (x, y) => U('flw', x, y), { flat: true });
+    // 森（針葉樹を密に）
+    place(1, 15, 9, 34, (x, y) => U(rand() < 0.45 ? 't-cedar' : 't-pine', x, y, R(0.85, 1.2)), { pack: 0.62 });
+    place(1, 6, 11, 30, (x, y) => U('t-oak', x, y, R(0.9, 1.15)), { pack: 0.7 });
+    place(1, 4, 7, 6, (x, y) => `<g transform="translate(${x} ${y})"><ellipse cy="1" rx="6" ry="2" opacity=".14"/><rect x="-4" y="-5" width="8" height="6" fill="#8C6A45" stroke="#4A341F" stroke-width="1"/><ellipse cy="-5" rx="4" ry="1.6" fill="#D9B27A" stroke="#4A341F" stroke-width=".8"/></g>`);
+    place(1, 5, 5, 0, (x, y) => `<g transform="translate(${x} ${y})"><rect x="-1" y="-3" width="2" height="4" fill="#F2EBDD"/><path d="M-4 -3 a4 3.4 0 0 1 8 0 Z" fill="#D9342B"/><circle cx="-1.3" cy="-4.6" r=".8" fill="#fff"/><circle cx="1.6" cy="-4" r=".7" fill="#fff"/></g>`, { flat: true });
+    place(1, 6, 5, 0, (x, y) => U('tuft', x, y), { flat: true });
+    // 大河の岸
+    for (let i = 0; i < 9; i++) { const x = R(10, MAP_W - 10), sgn = rand() < 0.5 ? -1 : 1, y = riverY(x) + sgn * R(27, 31); if (!hitRoad(x, y, 22) && !hitLabel(x, y, 6, 14)) objs.push({ y, s: U('reed', f1(x), f1(y), R(0.8, 1.1)) }); }
+    place(2, 4, 12, 30, (x, y) => U('t-oak', x, y, R(0.85, 1.1)));
+    place(2, 3, 8, 8, (x, y) => U('rock', x, y, R(0.8, 1.2)));
+    place(2, 6, 5, 0, (x, y) => U('tuft', x, y), { flat: true });
+    // 宿場町（道の両側に家並み、外れに田んぼ）
+    for (const p of road) {
+      if (p.y > bandY(3) - 20 || p.y < bandY(4) + 26) continue;
+      for (const sgn of [-1, 1]) {
+        const x = p.x + sgn * R(34, 40), y = p.y + R(-4, 8);
+        if (rand() < 0.3 || !free(x, y, 14, 22)) continue;
+        taken.push({ x, y, r: 13 });
+        objs.push({ y, s: U(pick(['h-a', 'h-a', 'h-b', 'h-c']), f1(x), f1(y), R(0.95, 1.1), sgn < 0) });
+      }
+    }
+    place(3, 3, 24, 0, (x, y) => `<g transform="translate(${x} ${y}) rotate(${f1(R(-8, 8))})"><rect x="-22" y="-13" width="44" height="26" fill="url(#m-paddy)" stroke="#8C7A4B" stroke-width="1.4"/><path d="M0 -13 v26 M-22 0 h44" stroke="#8C7A4B" stroke-width="1.2"/></g>`, { flat: true, edge: true });
+    place(3, 4, 6, 18, (x, y) => U('lantern', x, y));
+    place(3, 3, 12, 30, (x, y) => U('t-oak', x, y, R(0.8, 1)));
+    place(3, 5, 12, 22, (x, y) => U(pick(['h-a', 'h-b', 'h-c']), x, y, R(0.9, 1.05), rand() < 0.5));
+    // 山（左から光が当たる）
+    const mountain = (x, y) => {
+      const w = R(28, 42), h = w * R(1.25, 1.55), px = -w * 0.08;
+      const snow = h > 46;
+      return `<g transform="translate(${x} ${y})"><ellipse cy="1" rx="${f1(w * 0.95)}" ry="4" opacity=".12"/>
+        <path d="M${f1(-w)} 0 L${f1(px)} ${f1(-h)} L${f1(w)} 0 Z" fill="#A39D8F" stroke="#4E4A42" stroke-width="1.2" stroke-linejoin="round"/>
+        <path d="M${f1(px)} ${f1(-h)} L${f1(w)} 0 H${f1(w * 0.12)} L${f1(px + w * 0.2)} ${f1(-h * 0.45)} Z" fill="#7B766B"/>
+        <path d="M${f1(-w * 0.55)} ${f1(-h * 0.22)} l${f1(w * 0.16)} ${f1(h * 0.12)} M${f1(-w * 0.3)} ${f1(-h * 0.5)} l${f1(w * 0.12)} ${f1(h * 0.16)} M${f1(w * 0.45)} ${f1(-h * 0.3)} l${f1(-w * 0.1)} ${f1(h * 0.14)}" stroke="#4E4A42" stroke-width="1" opacity=".5" fill="none"/>
+        ${snow ? `<path d="M${f1(px)} ${f1(-h)} L${f1(px - w * 0.3)} ${f1(-h * 0.68)} l${f1(w * 0.12)} ${f1(-h * 0.05)} l${f1(w * 0.1)} ${f1(h * 0.08)} l${f1(w * 0.12)} ${f1(-h * 0.08)} l${f1(w * 0.12)} ${f1(h * 0.1)} l${f1(w * 0.1)} ${f1(-h * 0.06)} Z" fill="#fff" stroke="#4E4A42" stroke-width="1" stroke-linejoin="round"/>` : ''}</g>`;
+    };
+    place(4, 5, 30, 46, mountain, { edge: true, pack: 0.7 });
+    place(4, 2, 26, 40, mountain, { pack: 0.7 });
+    place(4, 7, 8, 32, (x, y) => U('t-cedar', x, y, R(0.75, 1)), { pack: 0.7 });
+    place(4, 7, 7, 8, (x, y) => U('rock', x, y, R(0.8, 1.5)));
+    // 城下（桜と灯籠）
+    place(5, 9, 11, 30, (x, y) => U('t-sakura', x, y, R(0.9, 1.15)), { pack: 0.75 });
+    place(5, 4, 6, 18, (x, y) => U('lantern', x, y));
+    place(5, 4, 7, 8, (x, y) => U('t-bush', x, y, R(0.8, 1.1)));
+    // 地図の折り目と方位
+    for (let y = 300; y < H - 100; y += 330) out += `<path d="M0 ${y} H${MAP_W}" stroke="#000" stroke-opacity=".07" stroke-width="1"/><path d="M0 ${y + 1.2} H${MAP_W}" stroke="#fff" stroke-opacity=".3" stroke-width="1"/>`;
+    const cpx = st.x < MAP_W / 2 ? MAP_W - 40 : 40, cpy = H - 96;
+    out += `<g transform="translate(${cpx} ${cpy})" opacity=".75"><circle r="15" fill="#F6F1E4" stroke="${INK}" stroke-width="1.2"/><path d="M0 -12 L4 0 L0 12 L-4 0 Z" fill="#fff" stroke="${INK}" stroke-width="1"/><path d="M0 -12 L4 0 H-4 Z" fill="#E60012"/><text y="-18" font-size="9" font-weight="900" text-anchor="middle" fill="${INK}">N</text></g>`;
+
+    out += ground;
+    objs.sort((a, b) => a.y - b.y);
+    out += objs.map(o => o.s).join('');
+
+    // 道（マスを結ぶなめらかな曲線）と、ゴールから城門への石畳
     let d = `M${nodes[0].x} ${nodes[0].y}`;
     for (let i = 1; i < nodes.length; i++) {
       const a = nodes[i - 1], b = nodes[i], my = (a.y + b.y) / 2;
       d += ` C ${a.x} ${my}, ${b.x} ${my}, ${b.x} ${b.y}`;
     }
-    out += `<path d="${d}" stroke="#B9935E" stroke-width="22" fill="none" stroke-linecap="round"/>`;
-    out += `<path d="${d}" stroke="#E7CF9E" stroke-width="16" fill="none" stroke-linecap="round"/>`;
-    out += `<path d="${d}" stroke="#FFFFFF" stroke-width="2" stroke-dasharray="4 8" fill="none" opacity=".7"/>`;
-    // 橋（道が川を渡るところ）
-    const bi = nodes.findIndex((n, i) => i > 0 && (nodes[i - 1].y - ry) * (n.y - ry) <= 0);
-    if (bi > 0) {
-      const a = nodes[bi - 1], b = nodes[bi];
-      const t = (a.y - (ry + 12)) / (a.y - b.y), bx = a.x + (b.x - a.x) * t;
-      out += `<rect x="${bx - 16}" y="${ry - 8}" width="32" height="40" fill="#9C6B3C"/><path d="M${bx - 16} ${ry - 8} v40 M${bx + 16} ${ry - 8} v40" stroke="#5B3A1E" stroke-width="3"/>`;
+    out += `<path d="M${gl.x} ${gl.y} C ${gl.x} ${gl.y - 34}, ${ccx} ${cby + 40}, ${ccx} ${cby + 2}" stroke="#77736A" stroke-width="16" fill="none" stroke-linecap="butt"/>
+      <path d="M${gl.x} ${gl.y} C ${gl.x} ${gl.y - 34}, ${ccx} ${cby + 40}, ${ccx} ${cby + 2}" stroke="#D5D0C2" stroke-width="12" fill="none" stroke-dasharray="5 1.4"/>`;
+    out += `<path d="${d}" stroke="#000" stroke-opacity=".16" stroke-width="27" fill="none" stroke-linecap="round" transform="translate(0 2.5)"/>
+      <path d="${d}" stroke="#7A5C34" stroke-width="25" fill="none" stroke-linecap="round"/>
+      <path d="${d}" stroke="#E2C88E" stroke-width="21" fill="none" stroke-linecap="round"/>
+      <path d="${d}" stroke="#EEDCAE" stroke-width="13" fill="none" stroke-linecap="round"/>
+      <path d="${d}" stroke="#B9965A" stroke-width="2.4" stroke-dasharray=".1 9" stroke-linecap="round" fill="none" transform="translate(-4 0)"/>
+      <path d="${d}" stroke="#B9965A" stroke-width="2" stroke-dasharray=".1 13" stroke-dashoffset="5" stroke-linecap="round" fill="none" transform="translate(4.5 0)"/>`;
+    // 朱塗りの橋
+    if (bridge) {
+      let planks = '';
+      for (let x = -32; x <= 32; x += 6.4) planks += `M${f1(x)} -12 v24 `;
+      out += `<g transform="translate(${f1(bridge.x)} ${f1(bridge.y)}) rotate(${f1(bridge.a)})">
+        <rect x="-39" y="-13" width="78" height="30" fill="#000" opacity=".16"/>
+        <rect x="-38" y="-13.5" width="76" height="27" fill="#C9A26B" stroke="#5B3A1E" stroke-width="1.4"/>
+        <path d="${planks}" stroke="#8F6A3A" stroke-width="1"/>
+        <path d="M-40 -13.5 H40 M-40 13.5 H40" stroke="#C4261B" stroke-width="4" stroke-linecap="round"/>
+        <path d="M-40 -13.5 H40 M-40 13.5 H40" stroke="#F0705F" stroke-width="1" stroke-linecap="round" transform="translate(0 -1)"/>
+        <g fill="#7E150E"><rect x="-42" y="-17" width="5" height="7"/><rect x="-2.5" y="-17" width="5" height="7"/><rect x="37" y="-17" width="5" height="7"/><rect x="-42" y="10" width="5" height="7"/><rect x="-2.5" y="10" width="5" height="7"/><rect x="37" y="10" width="5" height="7"/></g>
+      </g>`;
     }
     // マス
     board.cells.forEach((c, i) => {
       const n = nodes[i], info = cellInfo(c);
       const big = c.t === 'stop' || c.t === 'start' || c.t === 'goal';
-      const r = big ? 20 : 16;
-      const fill = { start: '#141414', goal: '#141414', stop: '#E60012', challenge: '#FFFFFF', all: '#FFE14D', event: '#EDEDEA', drink: '#FFF4D6', genre: '#FFFFFF' }[c.t];
-      const stroke = { challenge: '#E60012', drink: '#B8860B', stop: '#7A0009' }[c.t] || '#141414';
-      const lx = n.x < MAP_W / 2 ? n.x + r + 6 : n.x - r - 6;
-      out += `<g class="node">
-        ${c.t === 'stop' ? `<rect x="${n.x - r}" y="${n.y - r}" width="${r * 2}" height="${r * 2}" rx="5" fill="${fill}" stroke="${stroke}" stroke-width="2.5"/>`
-          : `<circle cx="${n.x}" cy="${n.y}" r="${r}" fill="${fill}" stroke="${stroke}" stroke-width="2"/>`}
-        <text x="${n.x}" y="${n.y + 6}" class="ic" text-anchor="middle">${c.t === 'stop' ? '止' : info.icon}</text>
-        <text x="${lx}" y="${n.y + 4}" class="lb${c.t === 'stop' ? ' is-stop' : ''}" text-anchor="${n.x < MAP_W / 2 ? 'start' : 'end'}">${i ? i + ' ' : ''}${esc(info.label)}</text>
-      </g>`;
+      const r = big ? 18 : 16;
+      const left = n.x < MAP_W / 2;
+      const lx = left ? n.x + r + (c.t === 'stop' ? 17 : 9) : n.x - r - (c.t === 'stop' ? 17 : 9);
+      if (c.t === 'stop') {
+        // 関所の門（紅白の遮断棒）
+        out += `<g><path d="M${n.x - 27} ${n.y + 8} v-40 M${n.x + 27} ${n.y + 8} v-40" stroke="#4A341F" stroke-width="4.5" stroke-linecap="round"/>
+          <rect x="${n.x - 31}" y="${n.y - 34}" width="62" height="8" fill="url(#m-stripe)" stroke="${INK}" stroke-width="1.4"/></g>`;
+      }
+      const num = i && c.t !== 'goal' ? `<tspan class="no">${i}</tspan> ` : '';
+      const lab = c.t === 'start'
+        ? `<text x="${n.x}" y="${n.y + 46}" class="lb is-start" text-anchor="middle">スタート</text>`
+        : `<text x="${lx}" y="${n.y + 4.5}" class="lb is-${c.t}" text-anchor="${left ? 'start' : 'end'}">${num}${esc(info.label)}</text>`;
+      out += `<g class="node" id="nd-${i}">${token(c, n.x, n.y, r)}${lab}</g>`;
     });
     return `<svg class="map" viewBox="0 0 ${MAP_W} ${H}" preserveAspectRatio="xMidYMin meet" aria-label="すごろくの地図">${out}</svg>`;
   }
@@ -609,6 +1195,345 @@ button:disabled { opacity: .35; cursor: default; }
     return top[rnd(top.length)] || null;
   }
 
+  // ---------- 駒・カメラ・演出 ----------
+  const G = () => state.game;
+  const cur = () => G().players[G().turn];
+  const cellAt = i => G().board.cells[i];
+  let busy = false; // 駒やサイコロのアニメーション中は操作を受け付けない
+  // 画面に出ているもの（保存しない）
+  const V = { built: null, scale: 1, pcs: [], cam: { y: 0, v: 0, run: false, target: 0, follow: -1, t: 0, w: 6.5 }, move: null, fresh: {} };
+  const $ = sel => document.querySelector(sel);
+
+  function fxLayer() {
+    let el = document.getElementById('fx');
+    if (!el) { el = document.createElement('div'); el.id = 'fx'; document.body.appendChild(el); }
+    return el;
+  }
+  function fxAdd(html, ms) {
+    const t = document.createElement('div');
+    t.innerHTML = html.trim();
+    const el = t.firstChild;
+    fxLayer().appendChild(el);
+    if (ms) setTimeout(() => el.remove(), ms / (RM ? 1 : Math.min(SPEED, 2)));
+    return el;
+  }
+  function stageRect() {
+    const w = $('.mapwrap');
+    return w ? w.getBoundingClientRect() : { left: 0, top: 80, width: innerWidth, height: innerHeight * 0.5 };
+  }
+  // テレビのテロップ風の帯
+  function telop(html, cls = '', ms = 1500) {
+    const r = stageRect();
+    return fxAdd(`<div class="telop ${cls}" style="top:${Math.round(r.top + r.height * 0.3)}px"><div class="telop-in">${html}</div></div>`, ms);
+  }
+  function confetti(n = 36) {
+    if (RM) return;
+    const cols = ['#E60012', '#FFE14D', '#141414', '#FFFFFF', '#1F5FD1', '#14915A'];
+    let s = '';
+    for (let i = 0; i < n; i++) s += `<i style="left:${rnd(100)}%;background:${cols[i % cols.length]};--d:${(Math.random() * 0.7).toFixed(2)}s;--x:${rnd(120) - 60}px;--r:${rnd(900) - 450}deg;--t:${(1.5 + Math.random() * 1.1).toFixed(2)}s;width:${6 + rnd(6)}px;height:${9 + rnd(8)}px"></i>`;
+    fxAdd(`<div class="confetti">${s}</div>`, 3600);
+  }
+  // 正解の赤丸・不正解のバツ
+  function stamp(ok) {
+    const r = stageRect();
+    fxAdd(`<div class="stamp ${ok ? 'is-ok' : 'is-ng'}" style="top:${Math.round(r.top + r.height * 0.42)}px">
+      <svg viewBox="0 0 120 120">${ok ? '<circle cx="60" cy="60" r="44" pathLength="100"/>' : '<path d="M24 24 L96 96" pathLength="100"/><path class="s2" d="M96 24 L24 96" pathLength="100"/>'}</svg>
+      <b>${ok ? '正解！' : '不正解…'}</b></div>`, 1500);
+  }
+
+  function measure() {
+    const box = $('.mapbox');
+    if (box) V.scale = box.clientWidth / MAP_W;
+  }
+  // 同じマスにいる駒は横に並べる。手番の人は少し手前
+  function restOf(i) {
+    const g = G(), p = g.players[i], n = geo(g.board).nodes[p.pos];
+    const same = g.players.map((q, j) => j).filter(j => g.players[j].pos === p.pos);
+    const k = same.indexOf(i), m = same.length;
+    const gap = m > 4 ? 11 : 14;
+    return { x: n.x + (k - (m - 1) / 2) * gap, y: n.y + (i === g.turn && m > 1 ? 4 : 0) - (m > 1 && k % 2 ? 3 : 0) };
+  }
+  function applyPiece(i) {
+    const pc = V.pcs[i];
+    if (!pc || !pc.el) return;
+    const s = V.scale;
+    pc.el.style.transform = `translate3d(${f1(pc.x * s)}px,${f1(pc.y * s)}px,0)`;
+    pc.lift.style.transform = `translate3d(0,${f1(-pc.jump * s)}px,0) rotate(${f1(pc.rot)}deg)`;
+    pc.body.style.transform = `scale(${pc.sx.toFixed(3)},${pc.sy.toFixed(3)})`;
+    const k = clamp(1 - pc.jump / 70, 0.45, 1);
+    pc.shadow.style.transform = `scale(${k.toFixed(2)})`;
+    pc.shadow.style.opacity = (0.32 * k).toFixed(2);
+    pc.el.style.zIndex = String(10 + Math.round(pc.y / 4) + (pc.jump > 0 ? 400 : 0));
+  }
+  function initPieces() {
+    const g = G();
+    V.pcs = g.players.map((p, i) => {
+      const el = document.getElementById(`pc-${i}`);
+      return { el, lift: el.querySelector('.pc-lift'), body: el.querySelector('.pc-body'), shadow: el.querySelector('.pc-shadow'), tag: el.querySelector('.pc-tag'), x: 0, y: 0, jump: 0, rot: 0, sx: 1, sy: 1 };
+    });
+  }
+  // 動いていない駒を定位置へ（smooth なら CSS でするっと寄る）
+  function layoutPieces(smooth, except = -1) {
+    const g = G();
+    if (!g) return;
+    g.players.forEach((p, i) => {
+      const pc = V.pcs[i];
+      if (!pc || !pc.el) return;
+      pc.el.classList.toggle('is-turn', i === g.turn);
+      if (i === except) return;
+      const r = restOf(i);
+      pc.x = r.x; pc.y = r.y; pc.jump = 0; pc.rot = 0; pc.sx = 1; pc.sy = 1;
+      pc.el.classList.toggle('is-slide', !!smooth && !RM);
+      applyPiece(i);
+    });
+  }
+
+  // カメラ: ばね（臨界減衰）で目標に寄せる。急に飛ばず、止まるときもなめらか
+  function camTick(now) {
+    const c = V.cam, wrap = $('.mapwrap');
+    if (!wrap) { c.run = false; return; }
+    const dt = Math.min(0.034, (now - c.t) / 1000) * Math.min(SPEED, 3); c.t = now;
+    if (c.follow >= 0 && V.pcs[c.follow]) c.target = V.pcs[c.follow].y;
+    const max = wrap.scrollHeight - wrap.clientHeight;
+    const tgt = clamp(c.target * V.scale - wrap.clientHeight * 0.6, 0, Math.max(0, max));
+    const w = c.w;
+    c.v += (w * w * (tgt - c.y) - 2 * w * c.v) * dt;
+    c.y += c.v * dt;
+    wrap.scrollTop = c.y;
+    if (c.follow < 0 && Math.abs(tgt - c.y) < 0.5 && Math.abs(c.v) < 4) { c.run = false; wrap.scrollTop = tgt; return; }
+    requestAnimationFrame(camTick);
+  }
+  function camStart() {
+    const c = V.cam, wrap = $('.mapwrap');
+    if (!wrap) return;
+    if (!c.run) { c.y = wrap.scrollTop; c.v = 0; c.t = performance.now(); c.run = true; requestAnimationFrame(camTick); }
+  }
+  function camTo(pos, snap) {
+    const g = G(), wrap = $('.mapwrap');
+    if (!g || !wrap) return;
+    const c = V.cam;
+    c.follow = -1; c.target = geo(g.board).nodes[pos].y;
+    if (snap || RM) {
+      c.run = false;
+      wrap.scrollTop = clamp(c.target * V.scale - wrap.clientHeight * 0.6, 0, Math.max(0, wrap.scrollHeight - wrap.clientHeight));
+      return;
+    }
+    c.w = 5; camStart();
+  }
+  function camFollow(pi) { V.cam.follow = pi; V.cam.w = 6.5; if (!RM) camStart(); }
+  function camRelease() { const c = V.cam; if (c.follow >= 0 && V.pcs[c.follow]) c.target = V.pcs[c.follow].y; c.follow = -1; if (RM) camTo(G().players[0] ? cur().pos : 0, true); }
+
+  // 着地の土ぼこりと、止まったマスの波紋
+  function dust(x, y, big) {
+    if (RM) return;
+    const lay = $('.pieces');
+    if (!lay) return;
+    const el = document.createElement('i');
+    el.className = `dust${big ? ' is-big' : ''}`;
+    el.style.transform = `translate3d(${f1(x * V.scale)}px,${f1(y * V.scale)}px,0)`;
+    lay.appendChild(el);
+    setTimeout(() => el.remove(), 700);
+  }
+  function setTag(pi, text) {
+    const pc = V.pcs[pi];
+    if (!pc || !pc.tag) return;
+    pc.tag.textContent = text || '';
+    pc.tag.hidden = !text;
+  }
+
+  // 1マスぶんのジャンプ: しゃがむ → 道に沿って放物線で跳ぶ → 着地で潰れて戻る
+  async function hop(pi, from, to, o) {
+    const g = G(), { nodes } = geo(g.board), pc = V.pcs[pi];
+    const end = restOf(pi);
+    if (!pc || !pc.el) return;
+    if (RM) {
+      pc.x = end.x; pc.y = end.y; pc.el.classList.add('is-slide'); applyPiece(pi);
+      layoutPieces(true, pi); camTo(to, true);
+      await sleep(220);
+      return;
+    }
+    const a = nodes[from], b = nodes[to];
+    const offA = { x: pc.x - a.x, y: pc.y - a.y }, offB = { x: end.x - b.x, y: end.y - b.y };
+    const seg = Math.min(from, to), fwd = to > from;
+    const dirX = Math.sign(b.x - a.x) || (fwd ? 1 : -1);
+    const A = o.first ? 0.2 : 0.14, L = 0.78;
+    let landedFx = false;
+    pc.el.classList.remove('is-slide'); pc.el.classList.add('is-hop');
+    layoutPieces(true, pi);
+    await animate(o.dur, t => {
+      let u = 0;
+      if (t < A) { // ため
+        const s = Math.sin((t / A) * Math.PI / 2);
+        pc.sy = 1 - 0.2 * s; pc.sx = 1 + 0.15 * s; pc.jump = 0; pc.rot = 0;
+      } else if (t < L) { // 空中
+        const k = (t - A) / (L - A);
+        u = k < 0.5 ? 2 * k * k * 0.5 + k * 0.5 : 1 - ((1 - k) * (1 - k) * 0.5 + (1 - k) * 0.5); // ほぼ等速、端だけ少し丸める
+        pc.jump = o.h * 4 * k * (1 - k);
+        const st = 0.17 * Math.abs(Math.cos(k * Math.PI));
+        pc.sy = 1 + st; pc.sx = 1 - st * 0.6;
+        pc.rot = dirX * 8 * Math.sin(k * Math.PI) * (fwd ? 1 : 0.6);
+      } else { // 着地
+        const k = (t - L) / (1 - L);
+        u = 1;
+        if (!landedFx) { landedFx = true; o.onLand && o.onLand(); }
+        const s = Math.exp(-4.2 * k) * Math.cos(k * 7.2) * (o.last ? 1.25 : 1);
+        pc.sy = 1 - 0.25 * s; pc.sx = 1 + 0.2 * s; pc.jump = 0; pc.rot = 0;
+      }
+      const p = roadPt(nodes, seg, fwd ? u : 1 - u);
+      pc.x = p.x + lerp(offA.x, offB.x, u); pc.y = p.y + lerp(offA.y, offB.y, u);
+      applyPiece(pi);
+    });
+    pc.sx = pc.sy = 1; pc.x = end.x; pc.y = end.y; applyPiece(pi);
+    pc.el.classList.remove('is-hop');
+  }
+  // その場で小さく跳ねる（喜ぶ・ぶつかる）
+  async function bounce(pi, h, dur, nudge = 0) {
+    const pc = V.pcs[pi];
+    if (!pc || !pc.el || RM) return;
+    const x0 = pc.x;
+    pc.el.classList.remove('is-slide'); pc.el.classList.add('is-hop');
+    await animate(dur, t => {
+      if (t < 0.7) { const k = t / 0.7; pc.jump = h * 4 * k * (1 - k); pc.sy = 1 + 0.12 * Math.abs(Math.cos(k * Math.PI)); pc.sx = 2 - pc.sy; pc.x = x0 + nudge * Math.sin(k * Math.PI); }
+      else { const k = (t - 0.7) / 0.3, s = Math.exp(-4 * k) * Math.cos(k * 7); pc.jump = 0; pc.sy = 1 - 0.2 * s; pc.sx = 1 + 0.16 * s; pc.x = x0; }
+      applyPiece(pi);
+    });
+    pc.sx = pc.sy = 1; pc.jump = 0; applyPiece(pi);
+    pc.el.classList.remove('is-hop');
+  }
+
+  // 駒を1マスずつ動かす。forward で途中にストップマスがあればそこで止まる
+  async function walk(pi, steps, opts = {}) {
+    const g = G(), p = g.players[pi];
+    const dir = steps >= 0 ? 1 : -1;
+    const total = Math.abs(steps);
+    let left = total, stopped = false, first = true;
+    if (!total) return false;
+    const back = dir < 0;
+    camFollow(pi);
+    V.pcs[pi] && V.pcs[pi].el && V.pcs[pi].el.classList.add('is-moving');
+    if (!first) await sleep(60);
+    while (left > 0) {
+      const from = p.pos, nx = p.pos + dir;
+      if (nx < 0 || nx > g.board.len) break;
+      p.pos = nx; left--;
+      const willStop = dir > 0 && !opts.ignoreStop && cellAt(nx).t === 'stop' && left > 0;
+      const last = left === 0 || nx >= g.board.len || willStop || nx === 0;
+      setTag(pi, opts.count ? String(left + 1) : '');
+      const pc = V.pcs[pi];
+      await hop(pi, from, nx, {
+        dur: back ? 400 : last ? 580 : 520, h: back ? 15 : last ? 30 : 25, first, last,
+        onLand() {
+          sfx(last ? 'land' : back ? 'back' : 'hop'); buzz(last ? 18 : 6);
+          if (pc) dust(pc.x, pc.y, last);
+          updateSteps(total - left, total);
+        },
+      });
+      first = false;
+      if (p.pos >= g.board.len) break;
+      if (willStop) { stopped = true; break; }
+    }
+    setTag(pi, '');
+    V.pcs[pi] && V.pcs[pi].el && V.pcs[pi].el.classList.remove('is-moving');
+    if (stopped) { // ストップマスにぶつかる
+      telop(`<small>STOP</small><b>${esc(cellAt(p.pos).name)}</b><span>で足止め</span>`, 'is-stop', 1500);
+      sfx('gate'); buzz([40, 50, 40]);
+      await bounce(pi, 5, 320, 0);
+      await sleep(420);
+    }
+    if (p.pos >= g.board.len && g.winner === null) {
+      g.winner = pi;
+      telop(`<small>GOAL</small><b>${esc(p.name)}</b><span>がゴール！</span>`, 'is-goal', 2200);
+      sound('fanfare'); confetti(44);
+      for (let i = 0; i < 3; i++) await bounce(pi, 20, 380);
+    }
+    camRelease();
+    layoutPieces(true);
+    await sleep(RM ? 0 : 160);
+    return stopped;
+  }
+  function updateSteps(done, total) {
+    const el = document.getElementById('steps');
+    if (!el) return;
+    el.querySelectorAll('i').forEach((d, i) => d.classList.toggle('is-done', i < done));
+    const n = document.getElementById('steps-left');
+    if (n) n.textContent = String(Math.max(0, total - done));
+  }
+
+  // サイコロ: 手元で振る → 盤の上に放る → 2回弾む → 角で一瞬ためて → コトンと出目が決まる
+  async function rollDice(val) {
+    const r = stageRect();
+    const src = $('.die-btn .die');
+    const S = 88;
+    const tx = r.left + r.width / 2, ty = r.top + r.height * 0.44;
+    let sx = tx, sy = innerHeight - 150;
+    if (src) { const b = src.getBoundingClientRect(); sx = b.left + b.width / 2; sy = b.top + b.height / 2; src.style.visibility = 'hidden'; }
+    const el = fxAdd(`<div class="dstage"><i class="ds-shadow"></i><div class="ds-die">${dieHTML()}</div>
+      <div class="ds-call" style="left:${Math.round(tx)}px;top:${Math.round(ty + S * 0.86)}px"><b>${val}</b><span>マス すすむ</span></div></div>`);
+    const die = el.querySelector('.ds-die'), cube = el.querySelector('.cube'), sh = el.querySelector('.ds-shadow');
+    const [ax, ay] = SHOW[val];
+    const put = (x, y, lift, sc, rx, ry, rz, sqx = 1, sqy = 1) => {
+      die.style.transform = `translate3d(${f1(x - S / 2)}px,${f1(y - lift - S / 2)}px,0) scale(${(sc * sqx).toFixed(3)},${(sc * sqy).toFixed(3)})`;
+      cube.style.transform = `rotateX(-24deg) rotateY(-28deg) rotateZ(${f1(rz)}deg) rotateX(${f1(ax + rx)}deg) rotateY(${f1(ay + ry)}deg)`;
+      const k = clamp(1 - lift / 260, 0.35, 1);
+      sh.style.transform = `translate3d(${f1(x - S / 2)}px,${f1(y + S * 0.42)}px,0) scale(${(sc * k).toFixed(2)})`;
+      sh.style.opacity = (0.3 * k).toFixed(2);
+    };
+    if (RM) {
+      put(tx, ty, 0, 1, 0, 0, 0);
+      sfx('set'); el.classList.add('is-set');
+      await sleep(1100);
+      el.remove();
+      return;
+    }
+    sound('dice'); buzz(20);
+    const TE = 40; // 角で止まるときの傾き
+    const T = { shake: 300, fly: 620, b1: 280, b2: 190, tame: 380, drop: 130 };
+    const spinTotal = T.fly + T.b1 + T.b2;
+    const turnsX = 360 * 3, turnsY = 360 * 2 + 90, turnsZ = 200;
+    const rot = ms => { const k = clamp(ms / spinTotal, 0, 1), e = 1 - (1 - k) * (1 - k); return [TE + turnsX * (1 - e), turnsY * (1 - e), turnsZ * (1 - e)]; };
+    const s0 = 0.66;
+    // 手元でカラカラ
+    await animate(T.shake, t => {
+      const j = Math.sin(t * Math.PI * 7);
+      put(sx + j * 5, sy + Math.cos(t * 40) * 2, 0, s0 + 0.05 * Math.sin(t * Math.PI), TE + turnsX + j * 26, turnsY + j * 30, turnsZ + j * 14);
+    });
+    // 放る
+    await animate(T.fly, t => {
+      const x = lerp(sx, tx, t), yb = lerp(sy, ty, t), lift = 150 * 4 * t * (1 - t) * (0.6 + 0.4 * t);
+      const [rx, ryy, rz] = rot(t * T.fly);
+      put(x, yb, lift, lerp(s0, 1, t), rx, ryy, rz);
+    });
+    sfx('die'); buzz(10);
+    await animate(T.b1, t => {
+      const [rx, ryy, rz] = rot(T.fly + t * T.b1);
+      const sq = t < 0.15 ? 1 - 0.1 * (1 - t / 0.15) : 1;
+      put(tx, ty, 46 * 4 * t * (1 - t), 1, rx, ryy, rz, 2 - sq, sq);
+    });
+    sfx('die'); buzz(8);
+    await animate(T.b2, t => {
+      const [rx, ryy, rz] = rot(T.fly + T.b1 + t * T.b2);
+      put(tx, ty, 16 * 4 * t * (1 - t), 1, rx, ryy, rz);
+    });
+    sfx('hop');
+    // タメ: 角で立ってゆらゆら
+    el.classList.add('is-tame');
+    await animate(T.tame, t => {
+      const wob = TE + 7 * Math.sin(t * Math.PI * 2.5) * (1 - t * 0.5);
+      put(tx, ty, 9 * Math.sin(Math.min(1, wob / 45) * Math.PI / 2), 1, wob, 0, 2.5 * Math.sin(t * Math.PI * 3));
+    });
+    // コトン
+    await animate(T.drop, t => { const e = t * t; put(tx, ty, 9 * (1 - e), 1, TE * (1 - e), 0, 0); });
+    sfx('set'); buzz(26);
+    el.classList.remove('is-tame'); el.classList.add('is-set');
+    animate(260, t => { const s = Math.exp(-4 * t) * Math.cos(t * 8); put(tx, ty, 0, 1, 0, 0, 0, 1 + 0.12 * s, 1 - 0.14 * s); });
+    await sleep(120);
+    sfx('pop');
+    await sleep(760);
+    el.classList.add('is-out');
+    await sleep(200);
+    el.remove();
+  }
+
   // ---------- ゲーム進行 ----------
   function startGame() {
     const s = state.setup;
@@ -618,17 +1543,32 @@ button:disabled { opacity: .35; cursor: default; }
       board: makeBoard(s.len, s.drinks, s.ng),
       players: names.map((name, i) => ({ name, color: COLORS[i], pos: 0, skip: false })),
       turn: 0, phase: 'turn', from: 0, q: null, picked: null, ok: null, allOk: [], dice: null,
-      challenge: false, msg: '', after: null, usedQ: [], hist: [], winner: null, asked: 0,
+      challenge: false, msg: '', res: null, after: null, usedQ: [], hist: [], winner: null, asked: 0,
     };
     state.screen = 'game';
-    Sound.unlock(); sound('round');
+    V.built = null;
+    Sound.unlock(); Sfx.unlock(); sound('round');
     commit();
-    setTimeout(() => follow(0, false), 50);
+    openingPan();
   }
-  const G = () => state.game;
-  const cur = () => G().players[G().turn];
-  const cellAt = i => G().board.cells[i];
-  let busy = false; // 駒やサイコロのアニメーション中は操作を受け付けない
+  // はじまり: お城（ゴール）を見せてから、スタートまで地図を下っていく
+  async function openingPan() {
+    const g = G();
+    if (RM || !$('.mapwrap')) { callTurn(); return; }
+    busy = true;
+    const wrap = $('.mapwrap');
+    const end = wrap.scrollTop;
+    wrap.scrollTop = 0; V.cam.run = false;
+    await sleep(900);
+    await animate(Math.min(3000, 1500 + g.board.len * 50), t => { const e = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; wrap.scrollTop = end * e; });
+    busy = false;
+    callTurn();
+  }
+  function callTurn() {
+    const g = G();
+    if (!g || state.screen !== 'game') return;
+    telop(`<small>NEXT</small><b style="--pc:${cur().color}">${esc(cur().name)}</b><span>の番</span>`, 'is-turn', 1400);
+  }
 
   function snapshot() {
     const g = G();
@@ -636,42 +1576,23 @@ button:disabled { opacity: .35; cursor: default; }
     if (g.hist.length > 30) g.hist.shift();
   }
 
-  // 駒を1マスずつ動かす。forward で途中にストップマスがあればそこで止まる
-  async function walk(pi, steps, opts = {}) {
-    const g = G(), p = g.players[pi];
-    const dir = steps >= 0 ? 1 : -1;
-    let left = Math.abs(steps), stopped = false;
-    while (left > 0) {
-      const nx = p.pos + dir;
-      if (nx < 0 || nx > g.board.len) break;
-      p.pos = nx; left--;
-      placePieces(); follow(p.pos, true);
-      sound('step'); buzz(8);
-      await sleep(STEP_MS);
-      if (p.pos >= g.board.len) break;
-      if (dir > 0 && !opts.ignoreStop && cellAt(p.pos).t === 'stop' && left > 0) { stopped = true; break; }
-    }
-    if (p.pos >= g.board.len && g.winner === null) g.winner = pi;
-    return stopped;
-  }
-
   async function roll() {
     const g = G();
     if (busy || g.phase !== 'turn') return;
     busy = true;
     const val = 1 + rnd(6);
+    camTo(cur().pos);
     g.dice = val; g.phase = 'rolling';
-    render();
-    sound('dice'); buzz(20);
-    const face = document.querySelector('.dice');
-    const t0 = Date.now();
-    while (Date.now() - t0 < 900) { if (face) face.textContent = String(1 + rnd(6)); await sleep(70); }
-    if (face) { face.textContent = String(val); face.classList.remove('is-rolling'); }
-    await sleep(350);
+    // サイコロは手元の絵から飛び出すので、足元の表示はまだ書き換えない
+    const btn = $('.act .big'); if (btn) { btn.disabled = true; btn.textContent = 'コロコロ…'; }
+    await rollDice(val);
     snapshot();
     g.from = cur().pos;
-    g.phase = 'moving'; save();
-    const stopped = await walk(g.turn, val);
+    g.phase = 'moving'; g.res = null; save();
+    V.move = { label: `${val}マス進む`, total: val, dice: val };
+    render();
+    const stopped = await walk(g.turn, val, { count: true });
+    V.move = null;
     busy = false;
     landed(stopped);
   }
@@ -679,7 +1600,7 @@ button:disabled { opacity: .35; cursor: default; }
   function landed(stopped) {
     const g = G(), p = cur(), c = cellAt(p.pos);
     g.challenge = false;
-    if (g.winner !== null) { g.msg = `${g.players[g.winner].name} がゴール！`; g.after = 'end'; g.phase = 'moved'; sound('fanfare'); commit(); return; }
+    if (g.winner !== null) { g.msg = `${g.players[g.winner].name} がゴール！`; g.res = 'goal'; g.after = 'end'; g.phase = 'moved'; commit(); return; }
     g.phase = 'landed';
     if (c.t === 'stop') g.msg = `${stopped ? 'ストップ！ ' : ''}${c.name}。少し難しい問題に正解すると2マス進める`;
     else if (c.t === 'genre') g.msg = `「${GENRES[c.g][0]}」の問題。正解ならここに残れる。不正解なら${g.from}マス目に戻る`;
@@ -688,7 +1609,7 @@ button:disabled { opacity: .35; cursor: default; }
     else if (c.t === 'event') g.msg = EVENTS[c.e].text;
     else if (c.t === 'drink') g.msg = DRINKS[c.d].text;
     else g.msg = '';
-    sound(c.t === 'stop' ? 'wrong' : 'reveal');
+    if (!stopped) sound('reveal');
     commit();
   }
 
@@ -722,84 +1643,119 @@ button:disabled { opacity: .35; cursor: default; }
     g.ok = ok; g.phase = 'reveal';
     sound(ok ? 'correct' : 'wrong'); buzz(ok ? 30 : [60, 40, 60]);
     commit();
+    stamp(ok);
+    if (ok) confetti(22);
   }
-  function choose(i) {
+  // 4択: 選んだ札が沈む → ひと呼吸（タメ）→ 正解オープン
+  async function choose(i) {
     const g = G(), q = QMAP.get(g.q.id);
-    if (g.phase !== 'question') return;
+    if (busy || g.phase !== 'question') return;
+    busy = true;
     g.picked = i;
+    const btns = document.querySelectorAll('.choice');
+    btns.forEach((b, j) => { b.disabled = true; b.classList.toggle('is-picked', j === i); b.classList.toggle('is-wait', j !== i); });
+    sfx('set'); buzz(12);
+    await sleep(RM ? 200 : 750);
+    busy = false;
     if (g.q.all) { g.phase = 'reveal'; sound('reveal'); commit(); return; }
     judge(q.choices[i] === q.answer);
   }
 
+  async function closeSheet() {
+    const sh = $('.qcard');
+    if (sh && !RM) { sh.classList.add('is-out'); const bk = $('.sheet-back'); if (bk) bk.classList.add('is-out'); await sleep(200); }
+  }
+
   async function afterReveal() {
     const g = G();
-    if (busy) return;
-    const kind = g.q.kind, ok = g.ok, allOk = g.allOk.slice();
-    g.q = null; g.phase = 'moving'; render();
+    if (busy || g.phase !== 'reveal') return;
     busy = true;
-    let msg = '';
+    const kind = g.q.kind, ok = g.ok, allOk = g.allOk.slice();
+    await closeSheet();
+    g.q = null; g.phase = 'moving';
+    let msg = '', res = null;
+    const mv = (label, total) => { V.move = { label, total }; render(); };
     if (kind === 'all') {
-      for (const i of allOk) { await walk(i, 2, { ignoreStop: true }); }
+      mv(allOk.length ? '正解者が2マス進む' : '', 0);
+      for (const i of allOk) { camTo(g.players[i].pos); await sleep(RM ? 0 : 350); await walk(i, 2, { ignoreStop: true }); }
       msg = allOk.length ? `${allOk.map(i => g.players[i].name).join('・')} が2マス進んだ` : '正解者なし';
+      res = 'event';
     } else if (kind === 'genre') {
-      if (ok) msg = `正解！ ${cur().pos}マス目に残る`;
-      else { await walk(g.turn, g.from - cur().pos); msg = `不正解… ${g.from}マス目に戻る`; }
+      res = ok ? 'ok' : 'ng';
+      if (ok) { mv('', 0); await bounce(g.turn, 16, 360); msg = `正解！ ${cur().pos}マス目に残る`; }
+      else { mv(`${g.from}マス目に戻る`, cur().pos - g.from); await sleep(RM ? 0 : 250); await walk(g.turn, g.from - cur().pos); msg = `不正解… ${g.from}マス目に戻る`; }
     } else if (kind === 'challenge') {
-      if (ok) { await walk(g.turn, 3); msg = 'チャレンジ成功！ 3マス進んだ'; }
-      else { await walk(g.turn, g.from - cur().pos); msg = `チャレンジ失敗… ${g.from}マス目に戻る`; }
+      res = ok ? 'ok' : 'ng';
+      if (ok) { mv('チャレンジ成功！ 3マス進む', 3); await sleep(RM ? 0 : 250); await walk(g.turn, 3, { count: true }); msg = 'チャレンジ成功！ 3マス進んだ'; }
+      else { mv(`${g.from}マス目に戻る`, cur().pos - g.from); await sleep(RM ? 0 : 250); await walk(g.turn, g.from - cur().pos); msg = `チャレンジ失敗… ${g.from}マス目に戻る`; }
     } else if (kind === 'stop') {
-      if (ok) { await walk(g.turn, 2, { ignoreStop: true }); msg = `${cellAt(g.from).t === 'stop' ? '' : ''}突破！ 2マス進んだ`; }
-      else msg = '残念。ここで足止め';
+      res = ok ? 'ok' : 'ng';
+      if (ok) { mv('突破！ 2マス進む', 2); await sleep(RM ? 0 : 250); await walk(g.turn, 2, { ignoreStop: true, count: true }); msg = '突破！ 2マス進んだ'; }
+      else { mv('', 0); msg = '残念。ここで足止め'; }
     }
+    V.move = null;
     busy = false;
-    finishTurn(msg);
+    finishTurn(msg, res);
   }
 
   async function applyEvent(e) {
     const g = G(), t = g.turn, all = g.players.map((_, i) => i);
-    busy = true; g.phase = 'moving'; render();
+    if (e === 'again') { g.phase = 'turn'; g.msg = 'もう一度サイコロ！'; sfx('pop'); commit(); return; }
+    busy = true; g.phase = 'moving';
+    V.move = { label: EVENTS[e].text, total: 0 }; render();
     let msg = EVENTS[e].text;
     if (e === 'fwd2') await walk(t, 2);
     else if (e === 'back3') await walk(t, -3);
     else if (e === 'skip') g.players[t].skip = true;
-    else if (e === 'again') { busy = false; g.phase = 'turn'; g.msg = 'もう一度サイコロ！'; commit(); return; }
-    else if (e === 'lastfwd') { const i = all.reduce((a, b) => (g.players[b].pos < g.players[a].pos ? b : a)); await walk(i, 2, { ignoreStop: true }); msg += `（${g.players[i].name}）`; }
+    else if (e === 'lastfwd') { const i = all.reduce((a, b) => (g.players[b].pos < g.players[a].pos ? b : a)); camTo(g.players[i].pos); await sleep(RM ? 0 : 450); await walk(i, 2, { ignoreStop: true }); msg += `（${g.players[i].name}）`; }
     else if (e === 'topback') {
       const rest = all.filter(i => i !== t);
       const i = rest.reduce((a, b) => (g.players[b].pos > g.players[a].pos ? b : a));
+      camTo(g.players[i].pos); await sleep(RM ? 0 : 450);
       await walk(i, -2); msg += `（${g.players[i].name}）`;
     }
+    V.move = null;
     busy = false;
-    finishTurn(msg);
+    finishTurn(msg, 'event');
   }
 
   async function drink(done) {
     const g = G(), c = cellAt(cur().pos);
-    if (busy) return;
+    if (busy || g.phase !== 'landed') return;
     let msg = `${cur().name} はパス`;
     if (done) {
-      busy = true; g.phase = 'moving'; render();
-      sound('fanfare');
-      await walk(g.turn, DRINKS[c.d].bonus, { ignoreStop: true });
+      busy = true; g.phase = 'moving';
+      V.move = { label: `乾杯！ ${DRINKS[c.d].bonus}マス進む`, total: DRINKS[c.d].bonus }; render();
+      sound('fanfare'); confetti(18);
+      telop(`<small>KANPAI</small><b>${DRINKS[c.d].icon} 乾杯！</b>`, 'is-drink', 1300);
+      await sleep(RM ? 0 : 700);
+      await walk(g.turn, DRINKS[c.d].bonus, { ignoreStop: true, count: true });
+      V.move = null;
       busy = false;
       msg = `飲んだ！ ${DRINKS[c.d].bonus}マス進んだ`;
     }
-    finishTurn(msg);
+    finishTurn(msg, done ? 'ok' : 'event');
   }
 
-  function finishTurn(msg) {
+  function finishTurn(msg, res = null) {
     const g = G();
     g.phase = 'moved';
     g.after = g.winner !== null ? 'end' : 'next';
     g.msg = g.winner !== null ? `${g.players[g.winner].name} がゴール！` : msg;
-    if (g.winner !== null) sound('fanfare');
+    g.res = g.winner !== null ? 'goal' : res;
     commit();
   }
 
+  function nextTurnIndex() {
+    const g = G(), n = g.players.length;
+    let t = g.turn;
+    for (let i = 0; i < n; i++) { t = (t + 1) % n; if (!g.players[t].skip) return t; }
+    return (g.turn + 1) % n;
+  }
   function proceed() {
     const g = G();
     if (busy) return;
-    if (g.after === 'end') { state.screen = 'result'; sound('fanfare'); commit(); return; }
+    if (g.after === 'end') { state.screen = 'result'; sound('drum'); commit(); setTimeout(() => { sound('fanfare'); confetti(60); }, RM ? 0 : 1500); return; }
     // 次の人へ（1回休みは飛ばす）
     const n = g.players.length, skipped = [];
     let t = g.turn;
@@ -808,10 +1764,13 @@ button:disabled { opacity: .35; cursor: default; }
       if (g.players[t].skip) { g.players[t].skip = false; skipped.push(g.players[t].name); continue; }
       break;
     }
-    g.turn = t; g.phase = 'turn'; g.dice = null; g.after = null;
+    g.turn = t; g.phase = 'turn'; g.dice = null; g.after = null; g.res = null;
     g.msg = skipped.length ? `${skipped.join('・')} は1回休み` : '';
     commit();
-    follow(cur().pos, true);
+    layoutPieces(true);
+    camTo(cur().pos);
+    sfx('pop');
+    callTurn();
   }
 
   function undo() {
@@ -819,9 +1778,10 @@ button:disabled { opacity: .35; cursor: default; }
     if (busy) return;
     if (!g || !g.hist.length) { toast('戻せる手がありません'); return; }
     Object.assign(g, JSON.parse(g.hist.pop()));
-    g.phase = 'turn'; g.q = null; g.dice = null; g.after = null; g.msg = '1手戻しました';
+    g.phase = 'turn'; g.q = null; g.dice = null; g.after = null; g.res = null; g.msg = '1手戻しました';
     closeMenu(); commit();
-    follow(cur().pos, false);
+    layoutPieces(true);
+    camTo(cur().pos);
   }
 
   // ---------- トースト・メニュー ----------
@@ -835,204 +1795,291 @@ button:disabled { opacity: .35; cursor: default; }
   let menuOpen = false;
   function closeMenu() { menuOpen = false; }
 
-  // ---------- 駒とカメラ ----------
-  // 駒は地図の上に重ねた要素。位置を変えるだけで CSS の transition で動く
-  function placePieces() {
-    const g = G();
-    if (!g) return;
-    const { nodes, H } = g.board;
-    g.players.forEach((p, i) => {
-      const el = document.getElementById(`pc-${i}`);
-      if (!el) return;
-      const same = g.players.map((q, j) => [q, j]).filter(([q]) => q.pos === p.pos);
-      const k = same.findIndex(([, j]) => j === i), m = same.length;
-      const off = m > 1 ? (k - (m - 1) / 2) * 13 : 0;
-      const n = nodes[p.pos];
-      el.style.left = `${((n.x + off) / MAP_W) * 100}%`;
-      el.style.top = `${((n.y - 22 - (m > 1 ? Math.abs(off) * 0.3 : 0)) / H) * 100}%`;
-      el.classList.toggle('is-turn', i === g.turn);
-      el.style.zIndex = i === g.turn ? 3 : 2;
-    });
-  }
-  function follow(pos, smooth) {
-    const wrap = document.querySelector('.mapwrap');
-    const g = G();
-    if (!wrap || !g) return;
-    const y = (g.board.nodes[pos].y / g.board.H) * wrap.scrollHeight;
-    wrap.scrollTo({ top: Math.max(0, y - wrap.clientHeight * 0.55), behavior: smooth ? 'smooth' : 'auto' });
-  }
-
   // ---------- 描画 ----------
+  const miniPawn = (color, ch = '') => `<span class="mini-pawn">${pawnSVG(color, ch)}</span>`;
+
   function standings() {
-    const g = G();
-    return `<div class="stand">${g.players.map((p, i) => `<div class="pl${i === g.turn ? ' is-turn' : ''}" style="--pc:${p.color}">
-      <span class="nm">${esc(p.name)}</span><span class="ps">${p.pos}</span>${p.skip ? '<span class="tag">休み</span>' : ''}</div>`).join('')}</div>`;
+    const g = G(), len = g.board.len;
+    const top = Math.max(...g.players.map(p => p.pos));
+    return `<div class="stand" style="--n:${g.players.length}">${g.players.map((p, i) => `<div class="pl${i === g.turn ? ' is-turn' : ''}${g.players.length > 4 ? ' is-narrow' : ''}" style="--pc:${p.color}">
+        <span class="nm">${esc(p.name)}</span>
+        <span class="ps">${p.pos >= len ? '<em>GOAL</em>' : `${p.pos}<small>/${len}</small>`}</span>
+        ${p.skip ? '<span class="rest">1回休み</span>' : p.pos === top && top > 0 && g.players.filter(q => q.pos === top).length === 1 ? '<span class="lead">トップ</span>' : ''}
+      </div>`).join('')}</div>
+      <div class="race" aria-hidden="true"><i class="race-goal"></i>${g.players.map((p, i) => `<i class="race-dot${i === g.turn ? ' is-turn' : ''}" style="--pc:${p.color};--at:${Math.min(1, p.pos / len)}"></i>`).join('')}</div>`;
   }
 
   function questionHTML() {
     const g = G(), q = QMAP.get(g.q.id);
     const reveal = g.phase === 'reveal';
-    const kindLabel = { all: '全員クイズ　早い者勝ち！', challenge: 'チャレンジ', stop: cellAt(cur().pos).name || 'ストップ', genre: '' }[g.q.kind];
-    const head = g.q.all ? kindLabel : `${esc(cur().name)} の番${kindLabel ? '　' + kindLabel : ''}`;
+    const p = cur(), c = cellAt(p.pos);
+    const kind = g.q.kind;
+    const stake = {
+      all: '早い者勝ち ・ 正解した人は 2マス進む',
+      challenge: `正解で さらに3マス ・ 不正解は ${g.from}マス目へ`,
+      stop: '正解で 2マス進む ・ 不正解は 足止め',
+      genre: `正解で ここに残る ・ 不正解は ${g.from}マス目へ`,
+    }[kind];
+    const title = { all: '全員クイズ', challenge: 'チャレンジ', stop: c.name || 'ストップ', genre: '' }[kind];
+    const gname = (GENRES[q.genre] || [''])[0], gcol = (GENRES[q.genre] || [])[2] || INK;
     const image = q.image_svg ? `<div class="q-img">${q.image_svg}</div>` : q.image_emoji ? `<div class="q-img is-emoji">${esc(q.image_emoji)}</div>` : '';
     let body = '';
     if (g.q.mode === 'choice4') {
-      body = `<div class="choices">${q.choices.map((c, i) => {
-        const cls = reveal ? (c === q.answer ? ' is-answer' : i === g.picked ? ' is-wrong' : ' is-dim') : '';
-        return `<button class="choice${cls}" data-act="choose" data-i="${i}" ${reveal ? 'disabled' : ''}><b>${'ABCD'[i]}</b><span>${esc(c)}</span></button>`;
+      body = `<div class="choices">${q.choices.map((ch, i) => {
+        const cls = reveal ? (ch === q.answer ? ' is-answer' : i === g.picked ? ' is-wrong' : ' is-dim') : '';
+        return `<button class="choice${cls}" data-act="choose" data-i="${i}" ${reveal ? 'disabled' : ''}><b>${'ABCD'[i]}</b><span>${esc(ch)}</span>${reveal && ch === q.answer ? '<i class="mk">○</i>' : reveal && i === g.picked ? '<i class="mk">×</i>' : ''}</button>`;
       }).join('')}</div>`;
     } else if (g.q.mode === 'five' && q.five) {
       body = `<div class="five">${Array.from(q.five).map((ch, i) => `<span style="--i:${i}">${reveal ? esc(ch) : ''}</span>`).join('')}</div>`;
     }
-    const answer = reveal ? `<div class="answer${g.ok === false ? ' is-ng' : ''}">
-        <div class="ans-head">${g.q.all || g.ok === null ? '正解' : g.ok ? '正解！' : '残念…'}</div>
-        <div class="ans">${esc(q.answer)}</div>
+    const verdict = g.q.all || g.ok === null ? '' : g.ok ? ' is-ok' : ' is-ng';
+    const answer = reveal ? `<div class="answer${verdict}" id="answer">
+        <div class="ans-head">${g.q.all || g.ok === null ? '正解は' : g.ok ? '正解！' : '残念… 正解は'}</div>
+        <div class="ans"><span>${esc(q.answer)}</span></div>
         ${q.accept_rule && g.q.mode !== 'choice4' ? `<p class="rule">${esc(q.accept_rule)}</p>` : ''}
         ${q.explanation ? `<p class="expl">${esc(q.explanation)}</p>` : ''}
       </div>` : '';
-    return `<div class="sheet-back"></div><section class="qcard">
-      <div class="q-head" style="--pc:${g.q.all ? '#111' : cur().color}"><span>${head}</span><span class="q-genre">${esc((GENRES[q.genre] || [''])[0])}</span></div>
-      ${image}
-      ${q.display ? `<p class="q-lead">${nl(q.question)}</p><div class="q-text is-display">${nl(q.display)}</div>` : `<div class="q-text">${nl(q.question)}</div>`}
-      ${body}
-      ${answer}
+    return `<div class="sheet-back"></div><section class="qcard is-${kind}">
+      <div class="q-head">
+        <span class="q-no"><small>Q</small>${g.asked}</span>
+        <div class="q-who">${g.q.all ? `<b>全員クイズ</b>` : `${miniPawn(p.color)}<b>${esc(p.name)}</b>`}${title && !g.q.all ? `<em>${esc(title)}</em>` : ''}</div>
+        <span class="q-genre" style="--gc:${gcol}">${esc(gname)}</span>
+      </div>
+      <p class="q-stake">${stake}</p>
+      <div class="q-body">
+        ${image}
+        ${q.display ? `<p class="q-lead">${nl(q.question)}</p><div class="q-text is-display">${nl(q.display)}</div>` : `<div class="q-text">${nl(q.question)}</div>`}
+        ${body}
+        ${answer}
+      </div>
     </section>`;
   }
 
   function actionHTML() {
     const g = G(), p = cur(), c = cellAt(p.pos);
-    const big = (act, label, extra = '') => `<button class="big" data-act="${act}" ${extra}>${label}</button>`;
-    const who = `<div class="who" style="--pc:${p.color}"><b>${esc(p.name)}</b> の番</div>`;
+    const big = (act, label, cls = '', extra = '') => `<button class="big ${cls}" data-act="${act}" ${extra}>${label}</button>`;
+    const who = (tail = 'の番') => `<div class="who" style="--pc:${p.color}">${miniPawn(p.color, p.name.slice(0, 1))}<div class="who-t"><b>${esc(p.name)}</b><small>${tail}</small></div></div>`;
     switch (g.phase) {
       case 'turn':
-        return `${who}<p class="sub">${esc(g.msg || `いま ${p.pos}マス目`)}</p>
-          <div class="dice" data-act="roll">🎲</div>${big('roll', 'サイコロを振る')}`;
-      case 'rolling':
-        return `${who}<div class="dice is-rolling">${g.dice}</div>${big('roll', '…', 'disabled')}`;
-      case 'moving':
-        return `${who}<p class="msg">移動中…</p>`;
+      case 'rolling': {
+        const rest = g.board.len - p.pos;
+        return `<div class="turn-row">
+            <div>${who()}<p class="sub is-left">${g.msg ? `<mark>${esc(g.msg)}</mark>` : `いま ${p.pos}マス目 ・ ゴールまで あと${rest}`}</p></div>
+            <button class="die-btn" data-act="roll" aria-label="サイコロを振る">${dieHTML('is-idle')}</button>
+          </div>
+          ${big('roll', 'サイコロを振る', 'is-red')}`;
+      }
+      case 'moving': {
+        const m = V.move || { label: '移動中', total: 0 };
+        return `<div class="turn-row">
+            <div>${who('')}<p class="sub is-left">${esc(m.label || '')}</p></div>
+            ${m.dice ? `<div class="left-box">${flatDie(m.dice)}<span>あと<b id="steps-left">${m.total}</b></span></div>` : ''}
+          </div>
+          <div class="steps" id="steps">${Array.from({ length: m.total || 0 }, () => '<i></i>').join('')}</div>`;
+      }
       case 'landed': {
         const info = cellInfo(c);
         const btn = c.t === 'drink'
-          ? `<div class="judge"><button class="big is-ok" data-act="drink" data-v="1">飲んだ！</button><button class="big is-ng" data-act="drink" data-v="0">パス</button></div>`
+          ? `<div class="judge">${big('drink', 'パス', 'is-white', 'data-v="0"')}${big('drink', '飲んだ！', 'is-amber', 'data-v="1"')}</div>`
           : c.t === 'event' ? big('resolve', 'OK')
-          : c.t === 'all' ? big('resolve', '全員クイズを出す')
+          : c.t === 'all' ? big('resolve', '全員クイズを出す', 'is-yellow')
           : c.t === 'goal' ? big('next', '結果発表')
           : big('resolve', '問題に挑戦');
-        return `<div class="landed is-${c.t}"><span class="ic">${info.icon}</span><b>${esc(info.label)}</b>${g.dice ? `<span class="dice-sm">${g.dice}</span>` : ''}</div>
+        return `<div class="landed is-${c.t}">${tokenIcon(c)}
+            <div class="landed-t"><small>${g.dice ? `${p.pos}マス目 ・ ` : ''}${esc(info.kind)}</small><b>${esc(info.label)}</b></div>
+            ${miniPawn(p.color, p.name.slice(0, 1))}
+          </div>
           <p class="msg">${esc(g.msg)}</p>${btn}`;
       }
       case 'question':
-        if (g.q.mode === 'choice4') return `<p class="sub">${g.q.all ? 'わかった人が答えをタップ' : '答えをタップ'}</p>`;
-        return `<p class="sub">${g.q.all ? 'わかった人は手を挙げて答えて！' : '声に出して答えてから'}</p>${big('show', '答えを見る')}`;
+        if (g.q.mode === 'choice4') return `<p class="hint">${g.q.all ? 'わかった人が答えをタップ' : `${esc(p.name)} が答えをタップ`}</p>`;
+        return `<p class="hint">${g.q.all ? 'わかった人は手を挙げて答えて！' : '声に出して答えてから'}</p>${big('show', '答えを見る')}`;
       case 'reveal':
         if (g.q.all) {
-          return `<p class="sub">正解した人をタップ（何人でも）</p>
-            <div class="pick">${g.players.map((pl, i) => `<button class="chip${g.allOk.includes(i) ? ' is-on' : ''}" style="--pc:${pl.color}" data-act="allOk" data-i="${i}">${esc(pl.name)}</button>`).join('')}</div>
-            ${big('afterReveal', '決定')}`;
+          return `<p class="hint">正解した人をタップ（何人でも）</p>
+            <div class="pick">${g.players.map((pl, i) => `<button class="pchip${g.allOk.includes(i) ? ' is-on' : ''}" style="--pc:${pl.color}" data-act="allOk" data-i="${i}">${miniPawn(pl.color)}${esc(pl.name)}</button>`).join('')}</div>
+            ${big('afterReveal', g.allOk.length ? `決定（${g.allOk.length}人が正解）` : '正解者なしで進む')}`;
         }
-        if (g.ok !== null) return big('afterReveal', 'OK');
-        return `<div class="judge"><button class="big is-ok" data-act="judge" data-v="1">正解した！</button><button class="big is-ng" data-act="judge" data-v="0">まちがえた</button></div>`;
-      case 'moved':
-        return `<div class="who" style="--pc:${p.color}"><b>${esc(p.name)}</b></div>
-          <p class="msg">${esc(g.msg)}</p>
-          ${big('next', g.after === 'end' ? '結果発表' : '次の人へ')}`;
+        if (g.ok !== null) return big('afterReveal', g.ok ? 'やった！ 次へ' : '次へ');
+        return `<p class="hint">みんなで判定</p><div class="judge">${big('judge', '<i>×</i>まちがえた', 'is-white', 'data-v="0"')}${big('judge', '<i>○</i>正解した！', 'is-red', 'data-v="1"')}</div>`;
+      case 'moved': {
+        const mark = { ok: '○', ng: '×', goal: '🏁', event: '' }[g.res] || '';
+        const nx = g.players[nextTurnIndex()];
+        return `<div class="res is-${g.res || 'none'}" style="--pc:${p.color}">${mark ? `<span class="res-mark">${mark}</span>` : miniPawn(p.color, p.name.slice(0, 1))}
+            <div class="res-t">${g.res === 'ok' || g.res === 'ng' ? `<small>${esc(p.name)}</small>` : ''}<b>${esc(g.msg)}</b></div></div>
+          ${g.after === 'end' ? big('next', '結果発表へ', 'is-red') : big('next', `次は <span class="nx" style="--pc:${nx.color}">${esc(nx.name)}</span> の番`)}`;
+      }
     }
     return '';
   }
 
-  function gameView() {
+  const barHTML = g => `<span class="title">すごろくクイズ</span><span class="count">${g.asked ? `<b>Q${g.asked}</b>` : ''}ゴールは ${g.board.len}マス目</span>
+    <button class="icon" data-act="menu" aria-label="メニュー"><i></i><i></i><i></i></button>`;
+  const menuHTML = g => (menuOpen ? `<div class="menu-back" data-act="menu"></div><div class="menu" role="menu">
+      <button data-act="undo" ${g.hist.length ? '' : 'disabled'}>1手戻す</button>
+      <button data-act="sound">${state.setup.sound ? '音を消す' : '音を出す'}</button>
+      <button data-act="quit">ゲームをやめる</button>
+      <button data-act="menu">閉じる</button>
+    </div>` : '');
+
+  // 中身が変わったときだけ書き換える。key が変わったとき（場面が変わったとき）だけ登場アニメーションをつける
+  function setSlot(id, html, key) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const freshKey = key === undefined ? null : key;
+    const isFresh = freshKey !== null && V.fresh[id] !== freshKey;
+    V.fresh[id] = freshKey;
+    if (el._html === html && !isFresh) return;
+    el._html = html;
+    el.classList.toggle('is-fresh', isFresh);
+    el.innerHTML = html;
+  }
+
+  function renderGame() {
     const g = G();
+    if (V.built !== g.board.seed || !$('.mapbox')) {
+      app.innerHTML = `<header class="bar" id="s-bar"></header><div id="s-menu"></div>
+        <main class="game">
+          <div class="mapwrap"><div class="mapbox">${mapSVG(g.board)}
+            <div class="pieces">${g.players.map((p, i) => `<div class="piece" id="pc-${i}" style="--pc:${p.color}">
+              <i class="pc-ring"></i><i class="pc-shadow"></i>
+              <div class="pc-lift"><div class="pc-body"><div class="pc-idle">${pawnSVG(p.color, p.name.slice(0, 1))}</div></div><b class="pc-tag" hidden></b></div>
+            </div>`).join('')}</div>
+          </div></div>
+          <div id="s-stand"></div>
+          <div id="s-sheet"></div>
+        </main>
+        <footer class="act" id="s-act"></footer>`;
+      V.built = g.board.seed; V.fresh = {};
+      initPieces(); measure(); layoutPieces(false); camTo(cur().pos, true);
+    }
     const inQ = g.phase === 'question' || g.phase === 'reveal';
-    return `<header class="bar">
-        <span class="title">すごろくクイズ</span><span class="count">${g.asked}問目 ・ ゴール${g.board.len}</span>
-        <button class="icon" data-act="menu" aria-label="メニュー">…</button>
-      </header>
-      ${menuOpen ? `<div class="menu" role="menu">
-        <button data-act="undo" ${g.hist.length ? '' : 'disabled'}>1手戻す</button>
-        <button data-act="sound">${state.setup.sound ? '音を消す' : '音を出す'}</button>
-        <button data-act="quit">ゲームをやめる</button>
-        <button data-act="menu">閉じる</button>
-      </div>` : ''}
-      <main class="game">
-        <div class="mapwrap"><div class="mapbox">${mapSVG(g.board)}
-          ${g.players.map((p, i) => `<div class="piece" id="pc-${i}" style="--pc:${p.color}"><span>${esc(p.name.slice(0, 1))}</span></div>`).join('')}
-        </div></div>
-        ${standings()}
-        ${inQ ? questionHTML() : ''}
-      </main>
-      <footer class="act">${actionHTML()}</footer>`;
+    setSlot('s-bar', barHTML(g));
+    setSlot('s-menu', menuHTML(g));
+    setSlot('s-stand', standings());
+    const sheet = $('.qcard'), top = sheet ? sheet.scrollTop : 0;
+    setSlot('s-sheet', inQ ? questionHTML() : '', inQ ? g.q.id : '');
+    const sh2 = $('.qcard');
+    if (sh2 && inQ) {
+      sh2.scrollTop = top;
+      const ans = document.getElementById('answer');
+      if (ans && g.phase === 'reveal') requestAnimationFrame(() => sh2.scrollTo({ top: Math.max(0, ans.offsetTop - sh2.clientHeight * 0.35), behavior: RM ? 'auto' : 'smooth' }));
+    }
+    const act = document.getElementById('s-act');
+    act.className = `act is-${g.phase}${inQ ? ' is-q' : ''}`;
+    setSlot('s-act', actionHTML(), `${g.phase}|${g.turn}|${g.q ? g.q.id : ''}|${g.after}|${g.ok}`);
+    layoutPieces(true, busy && V.cam.follow >= 0 ? V.cam.follow : -1);
   }
 
   function resultView() {
-    const g = G();
+    const g = G(), len = g.board.len;
     const rk = g.players.map((p, i) => ({ ...p, i })).sort((a, b) => b.pos - a.pos);
-    return `<header class="bar"><span class="title">すごろくクイズ</span></header>
-    <main class="result">
-      <p class="kicker">結果発表</p>
-      <h1 class="winner" style="--pc:${rk[0].color}">${esc(rk[0].name)}</h1>
-      <p class="sub">${rk[0].pos >= g.board.len ? 'お城に一番乗り！ 優勝' : '一番進んだ人の優勝'}</p>
-      <ol class="rank">${rk.map((p, n) => `<li style="--pc:${p.color}"><span class="pl">${n + 1}</span><span class="nm">${esc(p.name)}</span><span class="ps">${p.pos >= g.board.len ? 'ゴール' : p.pos + 'マス'}</span></li>`).join('')}</ol>
-      <p class="sub">${g.asked}問出題</p>
+    const w = rk[0];
+    return `<main class="result">
+      <div class="res-hero">
+        <p class="kicker"><span>結果発表</span></p>
+        <svg class="res-castle" viewBox="0 0 240 150" aria-hidden="true"><path d="M0 150 V120 Q60 104 120 112 T240 108 V150 Z" fill="#2B2B2B"/>${castleSVG(120, 134)}</svg>
+        <div class="champ" style="--pc:${w.color}">
+          <svg class="crown" viewBox="0 0 60 40" aria-hidden="true"><path d="M6 34 L3 10 L19 22 L30 4 L41 22 L57 10 L54 34 Z" fill="#FFE14D" stroke="${INK}" stroke-width="3" stroke-linejoin="round"/><circle cx="30" cy="4" r="3.4" fill="#E60012" stroke="${INK}" stroke-width="2"/></svg>
+          ${pawnSVG(w.color, w.name.slice(0, 1))}
+        </div>
+        <h1 class="winner"><span>${esc(w.name)}</span></h1>
+        <p class="win-sub">${w.pos >= len ? 'お城に一番乗り！ 優勝' : '一番進んだ人の優勝'}</p>
+      </div>
+      <ol class="rank">${rk.map((p, n) => `<li style="--pc:${p.color};--at:${Math.min(1, p.pos / len)};--i:${n}">
+        <span class="rk">${n + 1}<small>位</small></span>${miniPawn(p.color, p.name.slice(0, 1))}
+        <span class="nm">${esc(p.name)}</span><span class="ps">${p.pos >= len ? 'ゴール' : `${p.pos}マス`}</span>
+        <span class="bar-t"><i></i></span></li>`).join('')}</ol>
+      <p class="sub">ぜんぶで ${g.asked}問</p>
     </main>
-    <footer class="act"><button class="big" data-act="again">同じメンバーでもう一回</button><button class="link" data-act="home">はじめの画面へ</button></footer>`;
+    <footer class="act"><button class="big is-red" data-act="again">同じメンバーでもう一回</button><button class="link" data-act="home">はじめの画面へ</button></footer>`;
+  }
+
+  // ホームの見出し絵（道とマスと駒）
+  function heroArt() {
+    const cells = [{ t: 'genre', g: 'food' }, { t: 'all' }, { t: 'genre', g: 'sports' }, { t: 'challenge' }, { t: 'genre', g: 'geography' }];
+    const pts = [[38, 112], [100, 86], [164, 108], [228, 82], [292, 100]];
+    const d = 'M-10 128 C 20 124, 30 112, 38 112 S 78 84, 100 86 S 140 110, 164 108 S 204 80, 228 82 S 270 102, 292 100 S 340 70, 380 60';
+    return `<svg class="hero-art" viewBox="0 0 360 150" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
+      <rect width="360" height="150" fill="#CBE2A0"/>
+      <path d="M0 40 Q90 20 180 34 T360 22 V0 H0Z" fill="#9CC47F"/>
+      <path d="M-10 146 Q80 126 150 150 Z" fill="#69B2D8"/>
+      <g transform="translate(318 46) scale(.5)">${castleSVG(0, 60)}</g>
+      <g fill="#33734A"><path d="M24 44 l8 -22 l8 22z"/><path d="M48 50 l7 -19 l7 19z"/><path d="M150 40 l8 -22 l8 22z"/><path d="M186 48 l7 -18 l7 18z"/><path d="M252 38 l6 -16 l6 16z"/></g>
+      <path d="${d}" stroke="#7A5C34" stroke-width="23" fill="none" stroke-linecap="round"/>
+      <path d="${d}" stroke="#E2C88E" stroke-width="19" fill="none" stroke-linecap="round"/>
+      <path d="${d}" stroke="#EEDCAE" stroke-width="11" fill="none" stroke-linecap="round"/>
+      ${cells.map((c, i) => token(c, pts[i][0], pts[i][1], 14)).join('')}
+      <g transform="translate(148 62) scale(.86)">${pawnSVG(COLORS[1], '').replace(/<\/?svg[^>]*>/g, '')}</g>
+      <g transform="translate(83 40) scale(.86)">${pawnSVG(COLORS[0], '').replace(/<\/?svg[^>]*>/g, '')}</g>
+    </svg>`;
   }
 
   function homeView() {
     const s = state.setup;
     const resume = state.game && state.screen !== 'result' && state.game.winner === null;
-    return `<header class="bar"><span class="title">すごろくクイズ</span></header>
-      <main class="home">
-        <section>
-          <h2>プレイヤー <small>2〜6人</small></h2>
+    const h = (n, t, sm = '') => `<h2><i>${n}</i>${t}${sm ? `<small>${sm}</small>` : ''}</h2>`;
+    return `<main class="home">
+        <section class="hero">
+          <div class="hero-top">
+            <p class="onair"><i></i>スマホ1台を回して遊ぶ</p>
+            <h1 class="logo"><span class="l1">すごろく</span><span class="l2">クイズ</span></h1>
+            <div class="hero-die">${dieHTML('is-idle')}</div>
+          </div>
+          ${heroArt()}
+        </section>
+        <section class="form">
+          ${h(1, 'プレイヤー', '2〜6人')}
           <div class="players">${s.players.map((n, i) => `<div class="pin" style="--pc:${COLORS[i]}">
-            <input id="pl-${i}" data-player="${i}" value="${esc(n)}" placeholder="プレイヤー${i + 1}" maxlength="10" enterkeyhint="next">
+            ${miniPawn(COLORS[i], (n.trim() || String(i + 1)).slice(0, 1))}
+            <input id="pl-${i}" data-player="${i}" value="${esc(n)}" placeholder="プレイヤー${i + 1}" maxlength="10" enterkeyhint="next" autocomplete="off">
             ${s.players.length > 2 ? `<button class="x" data-act="delPlayer" data-i="${i}" aria-label="削除">×</button>` : ''}
           </div>`).join('')}</div>
-          ${s.players.length < 6 ? `<button class="link" data-act="addPlayer">＋ 追加</button>` : ''}
-        </section>
-        <section>
-          <h2>長さ</h2>
+          ${s.players.length < 6 ? `<button class="add" data-act="addPlayer">＋ プレイヤーを追加</button>` : ''}
+          ${h(2, 'コースの長さ')}
           <div class="seg">${[[15, 'さくっと'], [20, 'ふつう'], [30, 'じっくり']].map(([v, l]) => `<button class="${s.len === v ? 'is-on' : ''}" data-act="len" data-v="${v}">${l}<small>${v}マス</small></button>`).join('')}</div>
-          <h2>難しさ</h2>
+          ${h(3, '問題の難しさ')}
           <div class="seg">${[['easy', 'やさしめ'], ['normal', 'ふつう'], ['hard', 'むずかしい']].map(([v, l]) => `<button class="${s.level === v ? 'is-on' : ''}" data-act="level" data-v="${v}">${l}</button>`).join('')}</div>
-          <h2>お酒マス <small>テキーラ・メガジョッキ</small></h2>
+          ${h(4, 'お酒マス', 'テキーラ・メガジョッキ')}
           <div class="seg">${[[true, 'あり'], [false, 'なし']].map(([v, l]) => `<button class="${s.drinks === v ? 'is-on' : ''}" data-act="drinks" data-v="${v ? 1 : 0}">${l}</button>`).join('')}</div>
-          <h2>出さないジャンル</h2>
-          <div class="chips">${Object.entries(GENRES).map(([g, [l]]) => `<button class="chip${s.ng.includes(g) ? ' is-ng' : ''}" data-act="ng" data-g="${g}">${s.ng.includes(g) ? '× ' : ''}${l}</button>`).join('')}</div>
+          ${h(5, '出さないジャンル', 'タップで外す')}
+          <div class="chips">${Object.entries(GENRES).map(([g, [l, , col]]) => `<button class="chip${s.ng.includes(g) ? ' is-ng' : ''}" style="--gc:${col}" data-act="ng" data-g="${g}"><i></i>${l}</button>`).join('')}</div>
+          <details class="howto"><summary>遊び方</summary>
+            <ol>
+              <li>自分の番はサイコロを振って進む。草原から森・大河・宿場町・山を越えて、お城を目指す</li>
+              <li>止まったマスのジャンルの問題に答える。正解ならそこに残れる、不正解なら元の場所に戻る</li>
+              <li>4択はタップ、それ以外は声に出して答えてから「答えを見る」でみんなで判定</li>
+              <li>ストップマス（関所・峠・城門）は通り過ぎられず必ず止まる。正解すると2マス進める</li>
+              <li>チャレンジは難しい問題で、正解すると3マス進む。全員クイズは早い者勝ち</li>
+            </ol>
+          </details>
         </section>
-        <details class="howto"><summary>遊び方</summary>
-          <ol>
-            <li>自分の番はサイコロを振って進む。草原から森・大河・宿場町・山を越えて、お城を目指す</li>
-            <li>止まったマスのジャンルの問題に答える。正解ならそこに残れる、不正解なら元の場所に戻る</li>
-            <li>4択はタップ、それ以外は声に出して答えてから「答えを見る」でみんなで判定</li>
-            <li>🚧ストップマス（関所・峠・城門）は通り過ぎられず必ず止まる。正解すると2マス進める</li>
-            <li>🔥チャレンジは難しい問題で、正解すると3マス進む。📣全員クイズは早い者勝ち</li>
-          </ol>
-        </details>
       </main>
-      <footer class="act">
-        ${resume ? `<button class="big is-sub" data-act="resume">続きから遊ぶ</button>` : ''}
-        <button class="big" data-act="start">スタート</button>
+      <footer class="act is-home">
+        ${resume ? `<button class="big is-white" data-act="resume">続きから遊ぶ</button>` : ''}
+        <button class="big is-red" data-act="start">ゲームスタート</button>
       </footer>`;
   }
 
+  let lastScreen = null;
   function render() {
-    if (state.screen === 'game' && state.game) {
-      const wrap = document.querySelector('.mapwrap');
-      const top = wrap ? wrap.scrollTop : null;
-      app.innerHTML = gameView();
-      placePieces();
-      const w2 = document.querySelector('.mapwrap');
-      if (w2 && top !== null) w2.scrollTop = top;
-    } else if (state.screen === 'result' && state.game) app.innerHTML = resultView();
-    else app.innerHTML = homeView();
+    const scr = state.screen === 'game' && state.game ? 'game' : state.screen === 'result' && state.game ? 'result' : 'home';
+    const changed = scr !== lastScreen;
+    lastScreen = scr;
+    document.body.dataset.screen = scr;
+    if (scr === 'game') { renderGame(); return; }
+    V.built = null;
+    const main = app.querySelector('main'), top = main && !changed ? main.scrollTop : 0;
+    app.classList.toggle('is-fresh', changed);
+    app.innerHTML = scr === 'result' ? resultView() : homeView();
+    const m2 = app.querySelector('main');
+    if (m2) m2.scrollTop = top;
   }
 
   // ---------- 操作 ----------
   const actions = {
     start: startGame,
-    resume() { state.screen = 'game'; Sound.unlock(); commit(); setTimeout(() => follow(cur().pos, false), 50); },
+    resume() { state.screen = 'game'; Sound.unlock(); Sfx.unlock(); commit(); },
     again() { state.setup.players = state.game.players.map(p => p.name); startGame(); },
     home() { state.screen = 'home'; commit(); },
     addPlayer() { if (state.setup.players.length < 6) { state.setup.players.push(''); commit(); document.getElementById(`pl-${state.setup.players.length - 1}`)?.focus(); } },
@@ -1043,29 +2090,38 @@ button:disabled { opacity: .35; cursor: default; }
     ng(d) { const a = state.setup.ng, i = a.indexOf(d.g); if (i >= 0) a.splice(i, 1); else a.push(d.g); commit(); },
     roll,
     resolve: resolveCell,
-    show() { const g = G(); g.phase = 'reveal'; sound('reveal'); commit(); },
-    judge(d) { judge(d.v === '1'); },
+    show() { const g = G(); if (busy || g.phase !== 'question') return; g.phase = 'reveal'; sound('reveal'); commit(); },
+    judge(d) { if (!busy && G().phase === 'reveal' && G().ok === null) judge(d.v === '1'); },
     choose(d) { choose(Number(d.i)); },
-    allOk(d) { const a = G().allOk, i = Number(d.i), k = a.indexOf(i); if (k >= 0) a.splice(k, 1); else a.push(i); commit(); },
+    allOk(d) { const a = G().allOk, i = Number(d.i), k = a.indexOf(i); if (k >= 0) a.splice(k, 1); else a.push(i); sfx('tap'); commit(); },
     afterReveal,
     drink(d) { drink(d.v === '1'); },
     next: proceed,
     menu() { menuOpen = !menuOpen; render(); },
     undo,
-    sound() { state.setup.sound = !state.setup.sound; closeMenu(); commit(); },
-    quit() { closeMenu(); state.screen = 'home'; commit(); },
+    sound() { state.setup.sound = !state.setup.sound; closeMenu(); commit(); toast(state.setup.sound ? '音を出します' : '音を消しました'); },
+    quit() { if (busy) return; closeMenu(); state.screen = 'home'; commit(); },
   };
 
-  document.addEventListener('pointerdown', () => { if (!Sound.ready()) Sound.unlock(); }, { capture: true });
+  document.addEventListener('pointerdown', e => {
+    if (!Sound.ready()) Sound.unlock();
+    Sfx.unlock();
+    // 地図を指で動かしたら、カメラは手を離す
+    if (e.target.closest && e.target.closest('.mapwrap') && V.cam.follow < 0) V.cam.run = false;
+  }, { capture: true });
   document.addEventListener('click', e => {
     const b = e.target.closest('[data-act]');
     if (!b || b.disabled) return;
     const fn = actions[b.dataset.act];
+    if (b.classList.contains('big') || b.classList.contains('seg-b')) sfx('tap');
     if (fn) fn(b.dataset, b);
   });
   document.addEventListener('input', e => {
     const i = e.target.dataset.player;
-    if (i !== undefined) { state.setup.players[Number(i)] = e.target.value; save(); }
+    if (i === undefined) return;
+    state.setup.players[Number(i)] = e.target.value; save();
+    const t = e.target.parentElement.querySelector('.pawn text');
+    if (t) t.textContent = (e.target.value.trim() || String(Number(i) + 1)).slice(0, 1);
   });
   document.addEventListener('keydown', e => {
     if (e.key !== 'Enter' || e.target.dataset.player === undefined) return;
@@ -1073,12 +2129,19 @@ button:disabled { opacity: .35; cursor: default; }
     const nx = document.getElementById(`pl-${Number(e.target.dataset.player) + 1}`);
     if (nx) nx.focus(); else e.target.blur();
   });
+  let rsT;
+  window.addEventListener('resize', () => {
+    clearTimeout(rsT);
+    rsT = setTimeout(() => { if (state.screen === 'game' && state.game && $('.mapbox')) { measure(); layoutPieces(false, busy ? V.cam.follow : -1); if (!busy) camTo(cur().pos, true); } }, 80);
+  });
 
+  // 以前の保存データに入っていた座標は使わない（毎回作り直す）
+  if (state.game && state.game.board) { delete state.game.board.nodes; delete state.game.board.H; }
   // アニメーションの途中でアプリが閉じられた場合は、手番の頭からやり直す
   if (state.game && ['rolling', 'moving'].includes(state.game.phase)) {
     const g = state.game;
     if (g.hist.length && g.phase === 'moving') Object.assign(g, JSON.parse(g.hist.pop()));
-    g.phase = 'turn'; g.msg = '';
+    g.phase = 'turn'; g.msg = ''; g.q = null; g.dice = null;
     save();
   }
 
@@ -1088,7 +2151,6 @@ button:disabled { opacity: .35; cursor: default; }
   }
 
   render();
-  if (state.screen === 'game' && state.game) setTimeout(() => follow(cur().pos, false), 50);
 })();
 
 </script>
