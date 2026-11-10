@@ -1459,21 +1459,24 @@ body[data-screen="result"] .act { min-height: 0; }
     if (n) n.textContent = String(Math.max(0, total - done));
   }
 
-  // サイコロ: 手元で振る → 盤の上に放る → 2回弾む → 角で一瞬ためて → コトンと出目が決まる
+  // サイコロ: 手元で振る → 盤の奥に放る → 1回弾む → 手前へ4回ゴロゴロ転がる（だんだん遅く）→ 揺り戻してコトンと出目が決まる
   async function rollDice(val) {
     const r = stageRect();
     const src = $('.die-btn .die');
     const S = 88;
-    const tx = r.left + r.width / 2, ty = r.top + r.height * 0.44;
+    const ROLLS = 4, STEP = S * 0.6; // 1回転がるごとに進む距離（手前＝画面下へ）
+    const tx = r.left + r.width / 2, ty = r.top + r.height * 0.6;
+    const ly = Math.max(r.top + S * 0.7, ty - ROLLS * STEP); // 着地点（奥）
     let sx = tx, sy = innerHeight - 150;
     if (src) { const b = src.getBoundingClientRect(); sx = b.left + b.width / 2; sy = b.top + b.height / 2; src.style.visibility = 'hidden'; }
     const el = fxAdd(`<div class="dstage"><i class="ds-shadow"></i><div class="ds-die">${dieHTML()}</div>
       <div class="ds-call" style="left:${Math.round(tx)}px;top:${Math.round(ty + S * 0.86)}px"><b>${val}</b><span>マス すすむ</span></div></div>`);
     const die = el.querySelector('.ds-die'), cube = el.querySelector('.cube'), sh = el.querySelector('.ds-shadow');
     const [ax, ay] = SHOW[val];
-    const put = (x, y, lift, sc, rx, ry, rz, sqx = 1, sqy = 1) => {
+    // roll: 床の上での前転（手前方向）の角度。90°ごとに手前の面が入れ替わる
+    const put = (x, y, lift, sc, rx, ry, rz, roll = 0, sqx = 1, sqy = 1) => {
       die.style.transform = `translate3d(${f1(x - S / 2)}px,${f1(y - lift - S / 2)}px,0) scale(${(sc * sqx).toFixed(3)},${(sc * sqy).toFixed(3)})`;
-      cube.style.transform = `rotateX(-24deg) rotateY(-28deg) rotateZ(${f1(rz)}deg) rotateX(${f1(ax + rx)}deg) rotateY(${f1(ay + ry)}deg)`;
+      cube.style.transform = `rotateX(-24deg) rotateY(-28deg) rotateX(${f1(-roll)}deg) rotateZ(${f1(rz)}deg) rotateX(${f1(ax + rx)}deg) rotateY(${f1(ay + ry)}deg)`;
       const k = clamp(1 - lift / 260, 0.35, 1);
       sh.style.transform = `translate3d(${f1(x - S / 2)}px,${f1(y + S * 0.42)}px,0) scale(${(sc * k).toFixed(2)})`;
       sh.style.opacity = (0.3 * k).toFixed(2);
@@ -1486,46 +1489,56 @@ body[data-screen="result"] .act { min-height: 0; }
       return;
     }
     sound('dice'); buzz(20);
-    const TE = 40; // 角で止まるときの傾き
-    const T = { shake: 300, fly: 620, b1: 280, b2: 190, tame: 380, drop: 130 };
-    const spinTotal = T.fly + T.b1 + T.b2;
-    const turnsX = 360 * 3, turnsY = 360 * 2 + 90, turnsZ = 200;
-    const rot = ms => { const k = clamp(ms / spinTotal, 0, 1), e = 1 - (1 - k) * (1 - k); return [TE + turnsX * (1 - e), turnsY * (1 - e), turnsZ * (1 - e)]; };
-    const s0 = 0.66;
+    const T = { shake: 300, fly: 560, b1: 240 };
+    const spinTotal = T.fly + T.b1;
+    const turnsX = 360 * 2, turnsY = 360 + 180, turnsZ = 140;
+    // 空中のきりもみは着地までに収め、そのあとは前転だけにする
+    const rot = ms => { const k = clamp(ms / spinTotal, 0, 1), e = 1 - (1 - k) * (1 - k); return [turnsX * (1 - e), turnsY * (1 - e), turnsZ * (1 - e)]; };
+    const R0 = ROLLS * 90; // 前転の開始角（ここから 0 まで転がると出目の面が手前に来る）
+    const s0 = 0.62;
+    const scAt = y => 0.86 + 0.14 * clamp((y - ly) / (ty - ly || 1), 0, 1); // 手前に来るほど少し大きく
     // 手元でカラカラ
     await animate(T.shake, t => {
       const j = Math.sin(t * Math.PI * 7);
-      put(sx + j * 5, sy + Math.cos(t * 40) * 2, 0, s0 + 0.05 * Math.sin(t * Math.PI), TE + turnsX + j * 26, turnsY + j * 30, turnsZ + j * 14);
+      put(sx + j * 5, sy + Math.cos(t * 40) * 2, 0, s0 + 0.05 * Math.sin(t * Math.PI), turnsX + j * 26, turnsY + j * 30, turnsZ + j * 14, R0);
     });
-    // 放る
+    // 盤の奥へ放る
     await animate(T.fly, t => {
-      const x = lerp(sx, tx, t), yb = lerp(sy, ty, t), lift = 150 * 4 * t * (1 - t) * (0.6 + 0.4 * t);
+      const x = lerp(sx, tx, t), yb = lerp(sy, ly, t), lift = 170 * 4 * t * (1 - t) * (0.6 + 0.4 * t);
       const [rx, ryy, rz] = rot(t * T.fly);
-      put(x, yb, lift, lerp(s0, 1, t), rx, ryy, rz);
+      put(x, yb, lift, lerp(s0, scAt(ly), t), rx, ryy, rz, R0);
     });
     sfx('die'); buzz(10);
+    // 1回だけ小さく弾む
     await animate(T.b1, t => {
       const [rx, ryy, rz] = rot(T.fly + t * T.b1);
       const sq = t < 0.15 ? 1 - 0.1 * (1 - t / 0.15) : 1;
-      put(tx, ty, 46 * 4 * t * (1 - t), 1, rx, ryy, rz, 2 - sq, sq);
+      put(tx, ly, 38 * 4 * t * (1 - t), scAt(ly), rx, ryy, rz, R0, 2 - sq, sq);
     });
-    sfx('die'); buzz(8);
-    await animate(T.b2, t => {
-      const [rx, ryy, rz] = rot(T.fly + T.b1 + t * T.b2);
-      put(tx, ty, 16 * 4 * t * (1 - t), 1, rx, ryy, rz);
-    });
-    sfx('hop');
-    // タメ: 角で立ってゆらゆら
+    // 手前へゴロゴロ。角を支点に 90° ずつ転がり、そのたびに角が持ち上がる
+    const durs = [170, 200, 250, 340];
+    const corner = S * (Math.SQRT2 / 2 - 0.5) * 0.9;
+    for (let i = 0; i < ROLLS; i++) {
+      const y0 = ly + i * STEP;
+      const last = i === ROLLS - 1;
+      await animate(durs[i], u => {
+        // 最後の1回は勢いが落ちて、ゆっくり倒れ込む
+        const e = last ? 1 - Math.pow(1 - u, 2.2) : u;
+        const ang = R0 - (i + e) * 90;
+        const y = y0 + STEP * e;
+        put(tx, y, corner * Math.sin(Math.PI * e), scAt(y), 0, 0, 0, ang);
+      });
+      sfx('die'); buzz(last ? 14 : 6);
+    }
+    // 揺り戻し（少し行き過ぎて戻る）
     el.classList.add('is-tame');
-    await animate(T.tame, t => {
-      const wob = TE + 7 * Math.sin(t * Math.PI * 2.5) * (1 - t * 0.5);
-      put(tx, ty, 9 * Math.sin(Math.min(1, wob / 45) * Math.PI / 2), 1, wob, 0, 2.5 * Math.sin(t * Math.PI * 3));
+    await animate(300, t => {
+      const w = 9 * Math.sin(t * Math.PI) * (1 - t * 0.4);
+      put(tx, ty, corner * 0.35 * Math.sin(t * Math.PI), 1, 0, 0, 0, -w);
     });
-    // コトン
-    await animate(T.drop, t => { const e = t * t; put(tx, ty, 9 * (1 - e), 1, TE * (1 - e), 0, 0); });
     sfx('set'); buzz(26);
     el.classList.remove('is-tame'); el.classList.add('is-set');
-    animate(260, t => { const s = Math.exp(-4 * t) * Math.cos(t * 8); put(tx, ty, 0, 1, 0, 0, 0, 1 + 0.12 * s, 1 - 0.14 * s); });
+    animate(260, t => { const s = Math.exp(-4 * t) * Math.cos(t * 8); put(tx, ty, 0, 1, 0, 0, 0, 0, 1 + 0.1 * s, 1 - 0.12 * s); });
     await sleep(120);
     sfx('pop');
     await sleep(760);
