@@ -443,6 +443,15 @@ body[data-screen="result"] .act { min-height: 0; }
 }
 @media (min-width: 600px) { #app { max-width: 520px; margin: 0 auto; } }
 
+/* 手元のサイコロ：出た目を選ぶ */
+.pick-h { margin: 10px 0 8px; font-size: 14px; font-weight: 700; text-align: center; }
+.pick-h b { background: linear-gradient(transparent 60%, var(--marker) 60%); padding: 0 2px; }
+.pick { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
+.pick button { display: grid; place-items: center; padding: 8px 0 10px; min-height: 62px; border: 2.5px solid var(--ink); border-radius: 10px; background: var(--white); box-shadow: 0 4px 0 var(--ink); transition: transform .07s, box-shadow .07s; }
+.pick button:active:not(:disabled) { transform: translateY(4px); box-shadow: none; }
+.pick button:disabled { opacity: .5; }
+.pick .die2d { width: 40px; height: 40px; --s: 40px; }
+
 </style>
 </head>
 <body>
@@ -705,7 +714,7 @@ body[data-screen="result"] .act { min-height: 0; }
   function defaultState() {
     return {
       v: 2, screen: 'home',
-      setup: { players: ['', '', '', ''], len: 20, level: 'normal', drinks: true, ng: [], sound: true },
+      setup: { players: ['', '', '', ''], len: 20, level: 'normal', drinks: true, ng: [], sound: true, realDice: false },
       game: null,
     };
   }
@@ -1468,7 +1477,7 @@ body[data-screen="result"] .act { min-height: 0; }
   }
 
   // サイコロ: 手元で振る → 盤の奥に放る → 1回弾む → 手前へ4回ゴロゴロ転がる（だんだん遅く）→ 揺り戻してコトンと出目が決まる
-  async function rollDice(val) {
+  async function rollDice(val, quick) {
     const r = stageRect();
     const src = $('.die-btn .die');
     const S = 88;
@@ -1489,7 +1498,7 @@ body[data-screen="result"] .act { min-height: 0; }
       sh.style.transform = `translate3d(${f1(x - S / 2)}px,${f1(y + S * 0.42)}px,0) scale(${(sc * k).toFixed(2)})`;
       sh.style.opacity = (0.3 * k).toFixed(2);
     };
-    if (RM) {
+    if (RM || quick) {
       put(tx, ty, 0, 1, 0, 0, 0);
       sfx('set'); el.classList.add('is-set');
       await sleep(1100);
@@ -1603,18 +1612,21 @@ body[data-screen="result"] .act { min-height: 0; }
     if (g.hist.length > 30) g.hist.shift();
   }
 
-  async function roll() {
+  // given: 手元のサイコロで出た目（アプリでは振らずに、その目をそのまま使う）
+  async function roll(given) {
     const g = G();
     if (busy || g.phase !== 'turn') return;
     busy = true;
     V.opening = null;
-    const val = 1 + rnd(6);
+    const real = given >= 1 && given <= 6;
+    const val = real ? given : 1 + rnd(6);
     camTo(cur().pos);
     g.dice = val; g.phase = 'rolling';
     // サイコロは手元の絵から飛び出すので、足元の表示はまだ書き換えない
     const btn = $('.act .big'); if (btn) { btn.disabled = true; btn.textContent = 'コロコロ…'; }
+    document.querySelectorAll('.pick button').forEach(b => { b.disabled = true; });
     // 演出がどこかで失敗しても、出目どおりに進める
-    try { await rollDice(val); } catch (e) { const fx = document.getElementById('fx'); if (fx) fx.innerHTML = ''; }
+    try { await rollDice(val, real); } catch (e) { const fx = document.getElementById('fx'); if (fx) fx.innerHTML = ''; }
     snapshot();
     g.from = cur().pos;
     g.phase = 'moving'; g.res = null; save();
@@ -1893,6 +1905,11 @@ body[data-screen="result"] .act { min-height: 0; }
       case 'turn':
       case 'rolling': {
         const rest = g.board.len - p.pos;
+        if (state.setup.realDice) {
+          return `<div>${who()}<p class="sub is-left">${g.msg ? `<mark>${esc(g.msg)}</mark>` : `いま ${p.pos}マス目 ・ ゴールまで あと${rest}`}</p></div>
+          <p class="pick-h">手元のサイコロを振って、<b>出た目</b>をタップ</p>
+          <div class="pick">${[1, 2, 3, 4, 5, 6].map(n => `<button data-act="pick" data-v="${n}" aria-label="${n}">${flatDie(n)}</button>`).join('')}</div>`;
+        }
         return `<div class="turn-row">
             <div>${who()}<p class="sub is-left">${g.msg ? `<mark>${esc(g.msg)}</mark>` : `いま ${p.pos}マス目 ・ ゴールまで あと${rest}`}</p></div>
             <button class="die-btn" data-act="roll" aria-label="サイコロを振る">${dieHTML('is-idle')}</button>
@@ -1947,6 +1964,7 @@ body[data-screen="result"] .act { min-height: 0; }
     <button class="icon" data-act="menu" aria-label="メニュー"><i></i><i></i><i></i></button>`;
   const menuHTML = g => (menuOpen ? `<div class="menu-back" data-act="menu"></div><div class="menu" role="menu">
       <button data-act="undo" ${g.hist.length ? '' : 'disabled'}>1手戻す</button>
+      <button data-act="dice">${state.setup.realDice ? 'アプリのサイコロを使う' : '手元のサイコロを使う'}</button>
       <button data-act="sound">${state.setup.sound ? '音を消す' : '音を出す'}</button>
       <button data-act="quit">ゲームをやめる</button>
       <button data-act="menu">閉じる</button>
@@ -2072,7 +2090,9 @@ body[data-screen="result"] .act { min-height: 0; }
           <div class="seg">${[['easy', 'やさしめ'], ['normal', 'ふつう'], ['hard', 'むずかしい']].map(([v, l]) => `<button class="${s.level === v ? 'is-on' : ''}" data-act="level" data-v="${v}">${l}</button>`).join('')}</div>
           ${h(4, 'お酒マス', 'テキーラ・メガジョッキ')}
           <div class="seg">${[[true, 'あり'], [false, 'なし']].map(([v, l]) => `<button class="${s.drinks === v ? 'is-on' : ''}" data-act="drinks" data-v="${v ? 1 : 0}">${l}</button>`).join('')}</div>
-          ${h(5, '出さないジャンル', 'タップで外す')}
+          ${h(5, 'サイコロ', '手元にあるなら実物で振れる')}
+          <div class="seg">${[[false, 'アプリで振る'], [true, '手元のサイコロ']].map(([v, l]) => `<button class="${s.realDice === v ? 'is-on' : ''}" data-act="realDice" data-v="${v ? 1 : 0}">${l}</button>`).join('')}</div>
+          ${h(6, '出さないジャンル', 'タップで外す')}
           <div class="chips">${Object.entries(GENRES).map(([g, [l, , col]]) => `<button class="chip${s.ng.includes(g) ? ' is-ng' : ''}" style="--gc:${col}" data-act="ng" data-g="${g}"><i></i>${l}</button>`).join('')}</div>
           <details class="howto"><summary>遊び方</summary>
             <ol>
@@ -2117,8 +2137,11 @@ body[data-screen="result"] .act { min-height: 0; }
     len(d) { state.setup.len = Number(d.v); commit(); },
     level(d) { state.setup.level = d.v; commit(); },
     drinks(d) { state.setup.drinks = d.v === '1'; commit(); },
+    realDice(d) { state.setup.realDice = d.v === '1'; commit(); },
+    pick(d) { roll(Number(d.v)); },
+    dice() { if (busy) return; state.setup.realDice = !state.setup.realDice; closeMenu(); commit(); toast(state.setup.realDice ? '手元のサイコロで遊びます' : 'アプリでサイコロを振ります'); },
     ng(d) { const a = state.setup.ng, i = a.indexOf(d.g); if (i >= 0) a.splice(i, 1); else a.push(d.g); commit(); },
-    roll,
+    roll() { roll(); },
     resolve: resolveCell,
     show() { const g = G(); if (busy || g.phase !== 'question') return; g.phase = 'reveal'; sound('reveal'); commit(); },
     judge(d) { if (!busy && G().phase === 'reveal' && G().ok === null) judge(d.v === '1'); },
@@ -2177,7 +2200,14 @@ body[data-screen="result"] .act { min-height: 0; }
 
   // ---------- オフライン対応（ホーム画面に追加して使う） ----------
   if ('serviceWorker' in navigator && location.protocol === 'https:') {
-    navigator.serviceWorker.register('sw.js').catch(() => { /* 登録できない環境 */ });
+    // 新しい版が届いたら、すぐ切り替える（古い版のまま残らないように）
+    const hadSW = !!navigator.serviceWorker.controller;
+    let reloaded = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (!hadSW || reloaded || busy) return;
+      reloaded = true; location.reload();
+    });
+    navigator.serviceWorker.register('sw.js').then(r => r.update()).catch(() => { /* 登録できない環境 */ });
   }
 
   render();
