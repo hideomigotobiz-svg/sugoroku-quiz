@@ -1,4 +1,4 @@
-const CACHE = 'sugoroku-89ad26ccf1';
+const CACHE = 'sugoroku-cf3facf47e';
 const FILES = ['./', './index.html', './manifest.webmanifest', './icon-180.png', './icon-192.png', './icon-512.png'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => {

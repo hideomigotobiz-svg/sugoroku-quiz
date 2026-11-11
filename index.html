@@ -449,11 +449,11 @@ body[data-screen="result"] .act { min-height: 0; }
 /* 手元のサイコロ：出た目を選ぶ */
 .pick-h { margin: 10px 0 8px; font-size: 14px; font-weight: 700; text-align: center; }
 .pick-h b { background: linear-gradient(transparent 60%, var(--marker) 60%); padding: 0 2px; }
-.pick { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
-.pick button { display: grid; place-items: center; padding: 8px 0 10px; min-height: 62px; border: 2.5px solid var(--ink); border-radius: 10px; background: var(--white); box-shadow: 0 4px 0 var(--ink); transition: transform .07s, box-shadow .07s; }
-.pick button:active:not(:disabled) { transform: translateY(4px); box-shadow: none; }
-.pick button:disabled { opacity: .5; }
-.pick .die2d { width: 40px; height: 40px; --s: 40px; }
+.dpick { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
+.dpick button { display: grid; place-items: center; padding: 8px 0 10px; min-height: 62px; border: 2.5px solid var(--ink); border-radius: 10px; background: var(--white); box-shadow: 0 4px 0 var(--ink); transition: transform .07s, box-shadow .07s; }
+.dpick button:active:not(:disabled) { transform: translateY(4px); box-shadow: none; }
+.dpick button:disabled { opacity: .5; }
+.dpick .die2d { width: 40px; height: 40px; --s: 40px; }
 
 </style>
 </head>
@@ -809,8 +809,8 @@ body[data-screen="result"] .act { min-height: 0; }
     cells[0] = { t: 'start' };
     cells[len] = { t: 'goal' };
     // ストップマス（必ず止まる）: 川を渡る関所・山の峠・城門
-    const stopAt = len >= 25 ? [0.38, 0.62, 0.86] : len >= 18 ? [0.4, 0.68, 0.9] : [0.45, 0.85];
-    stopAt.forEach((f, i) => { cells[Math.round(len * f)] = { t: 'stop', name: STOPS[Math.min(i, STOPS.length - 1)] }; });
+    const stopAt = len >= 25 ? [[0.45, '関所'], [0.8, '峠']] : [[0.62, '関所']];
+    stopAt.forEach(([f, name]) => { cells[Math.round(len * f)] = { t: 'stop', name }; });
     const nd = !drinks ? 0 : len >= 20 ? 2 : 1;
     const dk = shuffle(['tequila', 'mega']);
     (nd === 2 ? [0.3, 0.76] : nd === 1 ? [0.55] : []).forEach((f, i) => {
@@ -860,7 +860,7 @@ body[data-screen="result"] .act { min-height: 0; }
 
   function cellInfo(c) {
     if (c.t === 'start') return { icon: '🚩', label: 'スタート', kind: 'スタート' };
-    if (c.t === 'goal') return { icon: '🏁', label: 'ゴール', kind: 'ゴール' };
+    if (c.t === 'goal') return { icon: '🏁', label: 'ゴール', kind: '最終問題' };
     if (c.t === 'genre') return { icon: GENRES[c.g][1], label: GENRES[c.g][0], kind: 'クイズ' };
     if (c.t === 'challenge') return { icon: '🔥', label: 'チャレンジ', kind: '正解で＋3マス' };
     if (c.t === 'all') return { icon: '📣', label: '全員クイズ', kind: '正解者は＋2マス' };
@@ -1434,7 +1434,8 @@ body[data-screen="result"] .act { min-height: 0; }
     if (!first) await sleep(60);
     while (left > 0) {
       const from = p.pos, nx = p.pos + dir;
-      if (nx < 0 || nx > g.board.len) break;
+      // ゴールマスに入れるのは手番の人だけ（ほかの人はゴール手前で待つ）
+      if (nx < 0 || nx > (pi === g.turn ? g.board.len : g.board.len - 1)) break;
       p.pos = nx; left--;
       const willStop = dir > 0 && !opts.ignoreStop && cellAt(nx).t === 'stop' && left > 0;
       const last = left === 0 || nx >= g.board.len || willStop || nx === 0;
@@ -1461,10 +1462,9 @@ body[data-screen="result"] .act { min-height: 0; }
       await sleep(420);
     }
     if (p.pos >= g.board.len && g.winner === null) {
-      g.winner = pi;
-      telop(`<small>GOAL</small><b>${esc(p.name)}</b><span>がゴール！</span>`, 'is-goal', 2200);
-      sound('fanfare'); confetti(44);
-      for (let i = 0; i < 3; i++) await bounce(pi, 20, 380);
+      telop(`<small>FINAL</small><b>最終問題</b><span>正解でゴール</span>`, 'is-stop', 1500);
+      sfx('gate'); buzz([30, 40, 30]);
+      await bounce(pi, 8, 320, 0);
     }
     camRelease();
     layoutPieces(true);
@@ -1481,6 +1481,7 @@ body[data-screen="result"] .act { min-height: 0; }
 
   // サイコロ: 手元で振る → 盤の奥に放る → 1回弾む → 手前へ4回ゴロゴロ転がる（だんだん遅く）→ 揺り戻してコトンと出目が決まる
   async function rollDice(val, quick) {
+    const anim = animate, wait = sleep, sfx0 = sfx, buzz0 = buzz;
     const r = stageRect();
     const src = $('.die-btn .die');
     const S = 88;
@@ -1509,6 +1510,31 @@ body[data-screen="result"] .act { min-height: 0; }
       el.remove();
       return;
     }
+    // どこかをタップしたら演出を飛ばして、出目を置いた形にすぐ移る
+    let skipped = false, onSkip;
+    const skipP = new Promise(r => { onSkip = r; });
+    const tap = () => { if (!skipped) { skipped = true; onSkip(); } };
+    document.addEventListener('pointerdown', tap, true);
+    try {
+      await Promise.race([play(), skipP]);
+    } finally {
+      document.removeEventListener('pointerdown', tap, true);
+    }
+    if (skipped) {
+      el.classList.remove('is-tame'); el.classList.add('is-set');
+      put(tx, ty, 0, 1, 0, 0, 0);
+      sfx0('set');
+      await wait(650);
+    }
+    el.classList.add('is-out');
+    await wait(200);
+    el.remove();
+
+    async function play() {
+    const animate = (d, fn) => Promise.race([anim(d, t => { if (!skipped) fn(t); }), skipP]);
+    const sleep = ms => Promise.race([wait(ms), skipP]);
+    const sfx = n => { if (!skipped) sfx0(n); };
+    const buzz = v => { if (!skipped) buzz0(v); };
     sound('dice'); buzz(20);
     const T = { shake: 300, fly: 560, b1: 240 };
     const spinTotal = T.fly + T.b1;
@@ -1557,15 +1583,14 @@ body[data-screen="result"] .act { min-height: 0; }
       const w = 9 * Math.sin(t * Math.PI) * (1 - t * 0.4);
       put(tx, ty, corner * 0.35 * Math.sin(t * Math.PI), 1, 0, 0, 0, -w);
     });
+    if (skipped) return;
     sfx('set'); buzz(26);
     el.classList.remove('is-tame'); el.classList.add('is-set');
     animate(260, t => { const s = Math.exp(-4 * t) * Math.cos(t * 8); put(tx, ty, 0, 1, 0, 0, 0, 0, 1 + 0.1 * s, 1 - 0.12 * s); });
     await sleep(120);
     sfx('pop');
     await sleep(760);
-    el.classList.add('is-out');
-    await sleep(200);
-    el.remove();
+    }
   }
 
   // ---------- ゲーム進行 ----------
@@ -1628,7 +1653,7 @@ body[data-screen="result"] .act { min-height: 0; }
     g.dice = val; g.phase = 'rolling';
     // サイコロは手元の絵から飛び出すので、足元の表示はまだ書き換えない
     const btn = $('.act .big'); if (btn) { btn.disabled = true; btn.textContent = 'コロコロ…'; }
-    document.querySelectorAll('.pick button').forEach(b => { b.disabled = true; });
+    document.querySelectorAll('.dpick button').forEach(b => { b.disabled = true; });
     // 演出がどこかで失敗しても、出目どおりに進める
     try { await rollDice(val, real); } catch (e) { const fx = document.getElementById('fx'); if (fx) fx.innerHTML = ''; }
     snapshot();
@@ -1646,7 +1671,7 @@ body[data-screen="result"] .act { min-height: 0; }
   function landed(stopped) {
     const g = G(), p = cur(), c = cellAt(p.pos);
     g.challenge = false;
-    if (g.winner !== null) { g.msg = `${g.players[g.winner].name} がゴール！`; g.res = 'goal'; g.after = 'end'; g.phase = 'moved'; commit(); return; }
+    if (atGoal()) { goalLanded(); return; }
     g.phase = 'landed';
     if (c.t === 'stop') g.msg = `${stopped ? 'ストップ！ ' : ''}${c.name}。少し難しい問題に正解すると2マス進める`;
     else if (c.t === 'genre') g.msg = `「${GENRES[c.g][0]}」の問題。正解ならここに残れる。不正解なら${g.from}マス目に戻る`;
@@ -1659,6 +1684,15 @@ body[data-screen="result"] .act { min-height: 0; }
     commit();
   }
 
+  function atGoal() { const g = G(); return g.winner === null && cur().pos >= g.board.len; }
+  function goalLanded() {
+    const g = G();
+    g.phase = 'landed'; g.res = null;
+    g.msg = `ゴール前の最終問題！ 正解すればゴール。不正解なら${g.from}マス目に戻る`;
+    sound('reveal');
+    commit();
+  }
+
   // 止まったマスの処理（「問題に挑戦」「効果を受ける」などのボタンから）
   async function resolveCell() {
     const g = G(), c = cellAt(cur().pos);
@@ -1667,6 +1701,7 @@ body[data-screen="result"] .act { min-height: 0; }
     if (c.t === 'challenge') return askQuestion({ hard: true, kind: 'challenge' });
     if (c.t === 'stop') return askQuestion({ hard: true, kind: 'stop' });
     if (c.t === 'all') return askQuestion({ all: true });
+    if (c.t === 'goal') return askQuestion({ kind: 'goal' });
     if (c.t === 'event') return applyEvent(c.e);
     if (c.t === 'drink') return; // 飲んだ／パスのボタンで処理
     finishTurn('');
@@ -1738,6 +1773,19 @@ body[data-screen="result"] .act { min-height: 0; }
       res = ok ? 'ok' : 'ng';
       if (ok) { mv('突破！ 2マス進む', 2); await sleep(RM ? 0 : 250); await walk(g.turn, 2, { ignoreStop: true, count: true }); msg = '突破！ 2マス進んだ'; }
       else { mv('', 0); msg = '残念。ここで足止め'; }
+    } else if (kind === 'goal') {
+      res = ok ? 'goal' : 'ng';
+      if (ok) {
+        mv('', 0);
+        g.winner = g.turn;
+        telop(`<small>GOAL</small><b>${esc(cur().name)}</b><span>がゴール！</span>`, 'is-goal', 2200);
+        sound('fanfare'); confetti(44);
+        for (let i = 0; i < 3; i++) await bounce(g.turn, 20, 380);
+      } else {
+        mv(`${g.from}マス目に戻る`, cur().pos - g.from); await sleep(RM ? 0 : 250);
+        await walk(g.turn, g.from - cur().pos);
+        msg = `最終問題、不正解… ${g.from}マス目に戻る`;
+      }
     }
     V.move = null;
     busy = false;
@@ -1785,6 +1833,8 @@ body[data-screen="result"] .act { min-height: 0; }
 
   function finishTurn(msg, res = null) {
     const g = G();
+    // 効果やボーナスでゴールマスに着いたときも、最終問題を出す
+    if (atGoal()) { goalLanded(); return; }
     g.phase = 'moved';
     g.after = g.winner !== null ? 'end' : 'next';
     g.msg = g.winner !== null ? `${g.players[g.winner].name} がゴール！` : msg;
@@ -1849,7 +1899,7 @@ body[data-screen="result"] .act { min-height: 0; }
     const top = Math.max(...g.players.map(p => p.pos));
     return `<div class="stand" style="--n:${g.players.length}">${g.players.map((p, i) => `<div class="pl${i === g.turn ? ' is-turn' : ''}${g.players.length > 4 ? ' is-narrow' : ''}" style="--pc:${p.color}">
         <span class="nm">${esc(p.name)}</span>
-        <span class="ps">${p.pos >= len ? '<em>GOAL</em>' : `${p.pos}<small>/${len}</small>`}</span>
+        <span class="ps">${g.winner === i ? '<em>GOAL</em>' : `${p.pos}<small>/${len}</small>`}</span>
         ${p.skip ? '<span class="rest">1回休み</span>' : p.pos === top && top > 0 && g.players.filter(q => q.pos === top).length === 1 ? '<span class="lead">トップ</span>' : ''}
       </div>`).join('')}</div>
       <div class="race" aria-hidden="true"><i class="race-goal"></i>${g.players.map((p, i) => `<i class="race-dot${i === g.turn ? ' is-turn' : ''}" style="--pc:${p.color};--at:${Math.min(1, p.pos / len)}"></i>`).join('')}</div>`;
@@ -1864,9 +1914,10 @@ body[data-screen="result"] .act { min-height: 0; }
       all: '早い者勝ち ・ 正解した人は 2マス進む',
       challenge: `正解で さらに3マス ・ 不正解は ${g.from}マス目へ`,
       stop: '正解で 2マス進む ・ 不正解は 足止め',
+      goal: `正解で ゴール！ ・ 不正解は ${g.from}マス目へ`,
       genre: `正解で ここに残る ・ 不正解は ${g.from}マス目へ`,
     }[kind];
-    const title = { all: '全員クイズ', challenge: 'チャレンジ', stop: c.name || 'ストップ', genre: '' }[kind];
+    const title = { all: '全員クイズ', challenge: 'チャレンジ', stop: c.name || 'ストップ', goal: '最終問題', genre: '' }[kind];
     const gname = (GENRES[q.genre] || [''])[0], gcol = (GENRES[q.genre] || [])[2] || INK;
     const image = q.image_svg ? `<div class="q-img">${q.image_svg}</div>` : q.image_emoji ? `<div class="q-img is-emoji">${esc(q.image_emoji)}</div>` : '';
     let body = '';
@@ -1912,7 +1963,7 @@ body[data-screen="result"] .act { min-height: 0; }
         if (state.setup.realDice) {
           return `<div>${who()}<p class="sub is-left">${g.msg ? `<mark>${esc(g.msg)}</mark>` : `いま ${p.pos}マス目 ・ ゴールまで あと${rest}`}</p></div>
           <p class="pick-h">手元のサイコロを振って、<b>出た目</b>をタップ</p>
-          <div class="pick">${[1, 2, 3, 4, 5, 6].map(n => `<button data-act="pick" data-v="${n}" aria-label="${n}">${flatDie(n)}</button>`).join('')}</div>`;
+          <div class="dpick">${[1, 2, 3, 4, 5, 6].map(n => `<button data-act="pick" data-v="${n}" aria-label="${n}">${flatDie(n)}</button>`).join('')}</div>`;
         }
         return `<div class="turn-row">
             <div>${who()}<p class="sub is-left">${g.msg ? `<mark>${esc(g.msg)}</mark>` : `いま ${p.pos}マス目 ・ ゴールまで あと${rest}`}</p></div>
@@ -1934,7 +1985,7 @@ body[data-screen="result"] .act { min-height: 0; }
           ? `<div class="judge">${big('drink', 'パス', 'is-white', 'data-v="0"')}${big('drink', '飲んだ！', 'is-amber', 'data-v="1"')}</div>`
           : c.t === 'event' ? big('resolve', 'OK')
           : c.t === 'all' ? big('resolve', '全員クイズを出す', 'is-yellow')
-          : c.t === 'goal' ? big('next', '結果発表')
+          : c.t === 'goal' ? big('resolve', '最終問題に挑戦', 'is-yellow')
           : big('resolve', '問題に挑戦');
         return `<div class="landed is-${c.t}">${tokenIcon(c)}
             <div class="landed-t"><small>${g.dice ? `${p.pos}マス目 ・ ` : ''}${esc(info.kind)}</small><b>${esc(info.label)}</b></div>
@@ -2103,7 +2154,8 @@ body[data-screen="result"] .act { min-height: 0; }
               <li>自分の番はサイコロを振って進む。草原から森・大河・宿場町・山を越えて、お城を目指す</li>
               <li>止まったマスのジャンルの問題に答える。正解ならそこに残れる、不正解なら元の場所に戻る</li>
               <li>4択はタップ、それ以外は声に出して答えてから「答えを見る」でみんなで判定</li>
-              <li>ストップマス（関所・峠・城門）は通り過ぎられず必ず止まる。正解すると2マス進める</li>
+              <li>ストップマス（関所・峠）は通り過ぎられず必ず止まる。正解すると2マス進める</li>
+              <li>ゴールマスでは最終問題。正解すればゴール、不正解なら振る前の場所に戻る</li>
               <li>チャレンジは難しい問題で、正解すると3マス進む。全員クイズは早い者勝ち</li>
             </ol>
           </details>
