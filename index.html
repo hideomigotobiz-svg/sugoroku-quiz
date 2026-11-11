@@ -2140,7 +2140,7 @@ body[data-screen="result"] .act { min-height: 0; }
           </div>`).join('')}</div>
           ${s.players.length < 6 ? `<button class="add" data-act="addPlayer">＋ プレイヤーを追加</button>` : ''}
           ${h(2, 'コースの長さ')}
-          <div class="seg">${[[15, 'さくっと'], [20, 'ふつう'], [30, 'じっくり']].map(([v, l]) => `<button class="${s.len === v ? 'is-on' : ''}" data-act="len" data-v="${v}">${l}<small>${v}マス</small></button>`).join('')}</div>
+          <div class="seg">${[[10, 'お試し'], [15, 'さくっと'], [20, 'ふつう'], [30, 'じっくり']].map(([v, l]) => `<button class="${s.len === v ? 'is-on' : ''}" data-act="len" data-v="${v}">${l}<small>${v}マス</small></button>`).join('')}</div>
           ${h(3, '問題の難しさ')}
           <div class="seg">${[['easy', 'やさしめ'], ['normal', 'ふつう'], ['hard', 'むずかしい']].map(([v, l]) => `<button class="${s.level === v ? 'is-on' : ''}" data-act="level" data-v="${v}">${l}</button>`).join('')}</div>
           ${h(4, 'お酒マス', 'テキーラ・メガジョッキ')}
