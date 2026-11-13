@@ -498,6 +498,31 @@ body[data-screen="result"] .act { min-height: 0; }
 .tc-mem input { border: 0; border-bottom: 1.5px dashed #C9C9C2; padding: 8px 4px; font-size: 16px; font-weight: 500; min-width: 0; background: transparent; border-radius: 0; }
 .tc-mem input:focus { outline: none; background: #FFF6BF; }
 
+/* みんなのスマホで参加 */
+.net { margin-left: 8px; border: 1.5px solid var(--white); border-radius: 999px; background: transparent; color: var(--white); font-size: 12px; font-weight: 900; padding: 2px 8px; white-space: nowrap; }
+.net.is-off { opacity: .55; }
+.net.is-guest { background: #2FA36B; border-color: #2FA36B; }
+#room { position: fixed; inset: 0; z-index: 70; display: grid; place-items: end center; }
+.room-back { position: absolute; inset: 0; background: rgba(0, 0, 0, .5); }
+.room-card { position: relative; width: min(440px, 100%); max-height: 94vh; overflow: auto; background: var(--white); border-top: 3px solid var(--ink); padding: 18px 18px calc(18px + env(safe-area-inset-bottom, 0px)); display: grid; gap: 10px; }
+.room-card h2 { margin: 0; font-size: 20px; font-weight: 900; }
+.room-lead, .room-note { margin: 0; font-size: 13px; line-height: 1.6; color: var(--sub); }
+.room-qr { width: min(220px, 60vw); aspect-ratio: 1; margin: 4px auto; display: grid; place-items: center; border: 2.5px solid var(--ink); border-radius: 10px; padding: 6px; background: #fff; font-size: 13px; color: var(--sub); }
+.room-qr svg { width: 100%; height: 100%; }
+.room-code { text-align: center; font-size: 14px; font-weight: 700; }
+.room-code b { font-size: 24px; letter-spacing: .12em; font-variant-numeric: tabular-nums; }
+.room-url { font-size: 12px; text-align: center; word-break: break-all; color: var(--sub); }
+.room-btns { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 8px; }
+.room-st { margin: 0; text-align: center; font-size: 15px; font-weight: 700; }
+.room-st b { color: #1B7A4C; font-size: 18px; }
+.room-st.is-ng, .g-msg.is-ng { color: var(--onair); }
+.guest .g-room { margin: 22px 0 4px; font-size: 14px; font-weight: 700; color: var(--sub); }
+.guest .g-room b { color: var(--ink); font-size: 20px; letter-spacing: .1em; }
+.guest .g-msg { font-size: 20px; font-weight: 900; margin: 6px 0; }
+.guest .g-help { font-size: 14px; line-height: 1.6; color: var(--sub); }
+.g-names { list-style: none; padding: 0; margin: 14px 0 0; display: grid; gap: 6px; }
+.g-names li { display: flex; align-items: center; gap: 10px; font-size: 17px; font-weight: 700; border-bottom: 2px solid var(--ink); padding: 4px; }
+
 </style>
 </head>
 <body>
@@ -767,8 +792,14 @@ body[data-screen="result"] .act { min-height: 0; }
   function load() {
     try { const s = JSON.parse(localStorage.getItem(STORE_KEY)); return s && s.v === 2 ? s : null; } catch (e) { return null; }
   }
-  let state = load() || defaultState();
-  function save() { try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) { /* 保存できない環境 */ } }
+  const QS = new URLSearchParams(location.search);
+  const GUEST_ROOM = (QS.get('room') || '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 12);
+  let state = GUEST_ROOM ? { ...defaultState(), setup: { ...defaultState().setup, sound: ((load() || {}).setup || {}).sound ?? true } } : (load() || defaultState());
+  function save() {
+    if (GUEST_ROOM) return; // 参加しているスマホは、幹事のスマホの状態を映すだけ
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) { /* 保存できない環境 */ }
+    try { netBroadcast(); } catch (e) { /* 起動直後はまだ通信の準備前 */ }
+  }
   function commit() { save(); render(); }
 
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -1715,7 +1746,8 @@ body[data-screen="result"] .act { min-height: 0; }
     const real = given >= 1 && given <= 6;
     const val = real ? given : 1 + rnd(6);
     camTo(cur().pos);
-    g.dice = val; g.phase = 'rolling';
+    g.dice = val; g.phase = 'rolling'; g.rollId = (g.rollId || 0) + 1; g.realRoll = real;
+    save();
     // サイコロは手元の絵から飛び出すので、足元の表示はまだ書き換えない
     const btn = $('.act .big'); if (btn) { btn.disabled = true; btn.textContent = 'コロコロ…'; }
     document.querySelectorAll('.dpick button').forEach(b => { b.disabled = true; });
@@ -1812,27 +1844,33 @@ body[data-screen="result"] .act { min-height: 0; }
     commit();
   }
   function stopCoop() { if (V.coop && V.coop.iv) clearInterval(V.coop.iv); V.coop = null; }
-  function coopStart() {
-    const g = G();
-    if (busy || g.phase !== 'question' || g.q.kind !== 'coop' || V.coop) return;
-    const end = performance.now() + g.q.sec * 1000 / SPEED;
-    let lastSec = g.q.sec;
+  // 残り時間の表示（onEnd があれば時間切れの処理もする。参加側は表示だけ）
+  function coopTicker(end, total, onEnd) {
+    stopCoop();
+    let lastSec = -1;
     V.coop = { end };
-    V.coop.iv = setInterval(() => {
+    const tick = () => {
       const left = Math.max(0, Math.ceil((end - performance.now()) * SPEED / 1000));
       const el = document.getElementById('coop-t');
       if (el) { el.textContent = String(left); el.classList.toggle('is-hurry', left <= 5); }
       const bar = document.getElementById('coop-bar');
-      if (bar) bar.style.transform = `scaleX(${Math.max(0, (end - performance.now()) / (g.q.sec * 1000 / SPEED)).toFixed(3)})`;
-      if (left !== lastSec) { lastSec = left; if (left <= 5 && left > 0) sfx('tap'); }
-      if (left <= 0) {
-        stopCoop();
-        sfx('gate'); buzz([60, 40, 60]);
-        if (G() && G().phase === 'question') { G().phase = 'reveal'; commit(); }
-      }
-    }, 100);
+      if (bar) bar.style.transform = `scaleX(${clamp((end - performance.now()) / (total * 1000 / SPEED), 0, 1).toFixed(3)})`;
+      if (left !== lastSec) { if (lastSec >= 0 && left <= 5 && left > 0) sfx('tap'); lastSec = left; }
+      if (left <= 0) { stopCoop(); if (onEnd) onEnd(); }
+    };
+    V.coop.iv = setInterval(tick, 100);
+    tick();
+  }
+  function coopStart() {
+    const g = G();
+    if (busy || g.phase !== 'question' || g.q.kind !== 'coop' || V.coop) return;
+    g.q.runAt = Date.now();
+    coopTicker(performance.now() + g.q.sec * 1000 / SPEED, g.q.sec, () => {
+      sfx('gate'); buzz([60, 40, 60]);
+      if (G() && G().phase === 'question') { G().phase = 'reveal'; commit(); }
+    });
     sfx('pop');
-    render();
+    commit();
   }
   function coopJudge(ok) {
     const g = G();
@@ -1849,7 +1887,7 @@ body[data-screen="result"] .act { min-height: 0; }
       ? `<b>リレー回答</b>：${mem.map(esc).join(' → ')} → … の順に1人1個ずつ。詰まったら失敗`
       : '<b>相談OK</b>：チームのみんなで合わせて言えばOK。同じ答えはダメ';
     const verdict = g.ok === null ? '' : g.ok ? ' is-ok' : ' is-ng';
-    const running = !!V.coop && !reveal;
+    const running = (!!V.coop || !!g.q.runAt) && !reveal;
     return `<div class="sheet-back"></div><section class="qcard is-coop">
       <div class="q-head">
         <span class="q-no"><small>Q</small>${g.asked}</span>
@@ -2156,7 +2194,7 @@ body[data-screen="result"] .act { min-height: 0; }
       }
       case 'question':
         if (g.q.kind === 'coop') {
-          if (!V.coop) return `<p class="hint">準備ができたらスタート</p>${big('coopStart', `スタート（${g.q.sec}秒）`, 'is-red')}`;
+          if (!V.coop && !g.q.runAt) return `<p class="hint">準備ができたらスタート</p>${big('coopStart', `スタート（${g.q.sec}秒）`, 'is-red')}`;
           return `<p class="hint">${COOPMAP.get(g.q.coop).need}個 言えた？</p><div class="judge">${big('coopJudge', '<i>×</i>ギブアップ', 'is-white', 'data-v="0"')}${big('coopJudge', '<i>○</i>言えた！', 'is-red', 'data-v="1"')}</div>`;
         }
         if (g.q.mode === 'choice4') return `<p class="hint">${g.q.all ? 'わかった人が答えをタップ' : `${esc(answerer(p) || p.name)} が答えをタップ`}</p>`;
@@ -2181,15 +2219,20 @@ body[data-screen="result"] .act { min-height: 0; }
     return '';
   }
 
-  const barHTML = g => `<span class="title">すごろくクイズ</span><span class="count">${g.asked ? `<b>Q${g.asked}</b>` : ''}ゴールは ${g.board.len}マス目</span>
+  const barHTML = g => `<span class="title">すごろくクイズ</span>${netBadge()}<span class="count">${g.asked ? `<b>Q${g.asked}</b>` : ''}ゴールは ${g.board.len}マス目</span>
     <button class="icon" data-act="menu" aria-label="メニュー"><i></i><i></i><i></i></button>`;
-  const menuHTML = g => (menuOpen ? `<div class="menu-back" data-act="menu"></div><div class="menu" role="menu">
-      <button data-act="undo" ${g.hist.length ? '' : 'disabled'}>1手戻す</button>
+  const menuHTML = g => (!menuOpen ? '' : GUEST_ROOM ? `<div class="menu-back" data-act="menu"></div><div class="menu" role="menu">
+      <button data-act="sound">${state.setup.sound ? '音を消す' : '音を出す'}</button>
+      <button data-act="leave">この部屋から抜ける</button>
+      <button data-act="menu">閉じる</button>
+    </div>` : `<div class="menu-back" data-act="menu"></div><div class="menu" role="menu">
+      <button data-act="room">📱 みんなのスマホで参加</button>
+      <button data-act="undo" ${(g.hist || []).length ? '' : 'disabled'}>1手戻す</button>
       <button data-act="dice">${state.setup.realDice ? 'アプリのサイコロを使う' : '手元のサイコロを使う'}</button>
       <button data-act="sound">${state.setup.sound ? '音を消す' : '音を出す'}</button>
       <button data-act="quit">ゲームをやめる</button>
       <button data-act="menu">閉じる</button>
-    </div>` : '');
+    </div>`);
 
   // 中身が変わったときだけ書き換える。key が変わったとき（場面が変わったとき）だけ登場アニメーションをつける
   function setSlot(id, html, key) {
@@ -2262,7 +2305,7 @@ body[data-screen="result"] .act { min-height: 0; }
         <span class="bar-t"><i></i></span></li>`).join('')}</ol>
       <p class="sub">ぜんぶで ${g.asked}問</p>
     </main>
-    <footer class="act"><button class="big is-red" data-act="again">同じメンバーでもう一回</button><button class="link" data-act="home">はじめの画面へ</button></footer>`;
+    ${GUEST_ROOM ? '<footer class="act"><p class="hint">次のゲームは幹事のスマホで始められます</p></footer>' : '<footer class="act"><button class="big is-red" data-act="again">同じメンバーでもう一回</button><button class="link" data-act="home">はじめの画面へ</button></footer>'}`;
   }
 
   // ホームの見出し絵（道とマスと駒）
@@ -2342,11 +2385,17 @@ body[data-screen="result"] .act { min-height: 0; }
       <footer class="act is-home">
         ${resume ? `<button class="big is-white" data-act="resume">続きから遊ぶ</button>` : ''}
         <button class="big is-red" data-act="start">ゲームスタート</button>
+        <button class="link" data-act="room">📱 みんなのスマホでも参加する</button>
       </footer>`;
   }
 
   let lastScreen = null;
   function render() {
+    if (GUEST_ROOM && (!state.game || state.screen === 'home' || !NET.got)) {
+      lastScreen = 'wait'; document.body.dataset.screen = 'home'; V.built = null;
+      app.innerHTML = guestWaitView();
+      return;
+    }
     const scr = state.screen === 'game' && state.game ? 'game' : state.screen === 'result' && state.game ? 'result' : 'home';
     const changed = scr !== lastScreen;
     lastScreen = scr;
@@ -2399,6 +2448,12 @@ body[data-screen="result"] .act { min-height: 0; }
     menu() { menuOpen = !menuOpen; render(); },
     undo,
     coopStart() { coopStart(); },
+    room() { closeMenu(); render(); openRoom(); },
+    roomClose() { closeRoomPanel(); },
+    roomCopy() { copyInvite(); },
+    roomShare() { shareInvite(); },
+    leave() { location.href = location.pathname; },
+    retry() { joinRoom(); },
     coopJudge(d) { coopJudge(d.v === '1'); },
     sound() { state.setup.sound = !state.setup.sound; closeMenu(); commit(); toast(state.setup.sound ? '音を出します' : '音を消しました'); },
     quit() { if (busy) return; stopCoop(); closeMenu(); state.screen = 'home'; commit(); },
@@ -2415,6 +2470,7 @@ body[data-screen="result"] .act { min-height: 0; }
     if (!b || b.disabled) return;
     const fn = actions[b.dataset.act];
     if (b.classList.contains('big') || b.classList.contains('seg-b')) sfx('tap');
+    if (GUEST_ROOM && !GUEST_LOCAL.has(b.dataset.act)) { netSend(b.dataset.act, { ...b.dataset }); return; }
     if (fn) fn(b.dataset, b);
   });
   document.addEventListener('input', e => {
@@ -2448,6 +2504,238 @@ body[data-screen="result"] .act { min-height: 0; }
     save();
   }
 
+  // ---------- みんなのスマホで参加（スマホ同士を直接つなぐ: WebRTC / PeerJS） ----------
+  // 幹事のスマホが「親」。親がゲームを進めて、そのたびに状態を全員に配る。
+  // 参加したスマホは、届いた状態を映す（駒やサイコロの動きは差分から再生）。ボタンを押すと、その操作を親に送る。
+  const SITE = 'https://hideomigotobiz-svg.github.io/sugoroku-quiz/';
+  const PEER_JS = 'https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js';
+  const QR_JS = 'https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js';
+  const PEER_HOST = QS.get('peerhost'); // 動作確認用（自前の仲介サーバー）
+  const GUEST_LOCAL = new Set(['menu', 'sound', 'leave', 'retry']);
+  const GUEST_OK = new Set(['roll', 'pick', 'resolve', 'drink', 'show', 'judge', 'choose', 'allOk', 'afterReveal', 'next', 'coopStart', 'coopJudge']);
+  const NET = { peer: null, conns: [], conn: null, status: '', got: false, pending: null, applying: false, panel: false, timer: 0 };
+  const PID = r => `sugoroku-quiz-${r}`;
+  const peerOpts = () => (PEER_HOST ? { host: PEER_HOST.split(':')[0], port: Number(PEER_HOST.split(':')[1] || 9000), path: '/', secure: false } : {});
+  const libs = {};
+  function loadScript(src) {
+    if (!libs[src]) libs[src] = new Promise((res, rej) => { const el = document.createElement('script'); el.src = src; el.onload = res; el.onerror = () => { delete libs[src]; rej(new Error('load')); }; document.head.appendChild(el); });
+    return libs[src];
+  }
+  function inviteURL() {
+    const base = /^https?:/.test(location.protocol) && !/claude/.test(location.hostname) ? location.origin + location.pathname : SITE;
+    return `${base}?room=${state.room}${PEER_HOST ? `&peerhost=${encodeURIComponent(PEER_HOST)}` : ''}`;
+  }
+  function netBadge() {
+    if (GUEST_ROOM) return `<span class="net is-guest${NET.status === 'ok' ? '' : ' is-off'}">📱 参加中</span>`;
+    if (!NET.peer) return '';
+    return `<button class="net${NET.conns.length ? '' : ' is-off'}" data-act="room">📱 ${NET.conns.length}</button>`;
+  }
+
+  // --- 幹事（親） ---
+  function roomCode() { const a = 'abcdefghjkmnpqrstuvwxyz23456789'; let r = ''; for (let i = 0; i < 6; i++) r += a[rnd(a.length)]; return r; }
+  async function hostRoom() {
+    if (NET.peer && !NET.peer.destroyed) return;
+    if (!state.room) state.room = roomCode();
+    state.roomOn = true; save();
+    NET.status = 'connecting'; renderRoom();
+    try { await loadScript(PEER_JS); } catch (e) { NET.status = 'nolib'; renderRoom(); return; }
+    const start = tries => {
+      const peer = new window.Peer(PID(state.room), peerOpts());
+      NET.peer = peer;
+      peer.on('open', () => { NET.status = 'open'; renderRoom(); render(); });
+      peer.on('connection', c => {
+        c.on('open', () => { NET.conns.push(c); sendState(c); renderRoom(); render(); toast('スマホが1台つながりました'); });
+        c.on('data', d => onGuestMsg(d));
+        const gone = () => { if (!NET.conns.includes(c)) return; NET.conns = NET.conns.filter(x => x !== c); renderRoom(); render(); };
+        c.on('close', gone); c.on('error', gone);
+      });
+      peer.on('disconnected', () => { if (!peer.destroyed) { try { peer.reconnect(); } catch (e) { /* つなぎ直せない */ } } });
+      peer.on('error', e => {
+        // 開き直した直後は、前の部屋がまだ残っていることがある → 少し待ってやり直す
+        if (e.type === 'unavailable-id' && tries < 10) { peer.destroy(); NET.peer = null; setTimeout(() => start(tries + 1), 3000); return; }
+        if (e.type === 'peer-unavailable') return;
+        NET.status = 'error'; renderRoom();
+      });
+    };
+    start(0);
+  }
+  function snapshot4net() {
+    const g = state.game ? { ...state.game, hist: [] } : null;
+    const st = state.setup;
+    return { screen: state.screen, game: g, setup: { players: st.players, members: st.members, team: st.team, realDice: st.realDice, len: st.len } };
+  }
+  function sendState(c) { try { c.send({ t: 's', s: snapshot4net() }); } catch (e) { /* 送れなかった */ } }
+  function netBroadcast() {
+    if (GUEST_ROOM || !NET.conns.length || NET.timer) return;
+    NET.timer = setTimeout(() => { NET.timer = 0; const msg = { t: 's', s: snapshot4net() }; NET.conns.forEach(c => { try { c.send(msg); } catch (e) { /* 送れなかった */ } }); }, 0);
+  }
+  function onGuestMsg(d) {
+    if (!d || d.t !== 'a' || !GUEST_OK.has(d.act) || !state.game || state.screen !== 'game') return;
+    try { actions[d.act](d.d || {}); } catch (e) { /* 無効な操作 */ }
+  }
+  // 招待パネル（QR コードと URL）
+  async function openRoom() {
+    NET.panel = true;
+    renderRoom();
+    hostRoom();
+    try { await loadScript(QR_JS); } catch (e) { /* QR なしでも URL で参加できる */ }
+    renderRoom();
+  }
+  function closeRoomPanel() { NET.panel = false; renderRoom(); }
+  function renderRoom() {
+    let el = document.getElementById('room');
+    if (!NET.panel) { if (el) el.remove(); return; }
+    if (!el) { el = document.createElement('div'); el.id = 'room'; document.body.appendChild(el); }
+    const url = state.room ? inviteURL() : '';
+    let qr = '';
+    if (url && window.qrcode) { try { const q = window.qrcode(0, 'M'); q.addData(url); q.make(); qr = q.createSvgTag({ cellSize: 4, margin: 2, scalable: true }); } catch (e) { qr = ''; } }
+    const st = NET.status === 'open' ? (NET.conns.length ? `<b>${NET.conns.length}台</b> つながっています` : 'みんなが開くのを待っています')
+      : NET.status === 'nolib' ? '通信の準備ができませんでした（ネットにつながっているか確認）'
+      : NET.status === 'error' ? 'つながりませんでした。少し待ってもう一度開いてください' : '部屋を準備しています…';
+    el.innerHTML = `<div class="room-back" data-act="roomClose"></div><section class="room-card" role="dialog" aria-label="みんなのスマホで参加">
+      <h2>みんなのスマホで参加</h2>
+      <p class="room-lead">このQRコードを読むか、URLを送ると、それぞれのスマホで同じ盤面が見られます。自分の番は自分のスマホでサイコロを振れます</p>
+      <div class="room-qr">${qr || '<span>QRコードを準備中…</span>'}</div>
+      <div class="room-code">部屋番号 <b>${esc(state.room || '------')}</b></div>
+      <div class="room-url">${esc(url)}</div>
+      <div class="room-btns"><button class="big is-white" data-act="roomCopy">URLをコピー</button>${navigator.share ? '<button class="big is-white" data-act="roomShare">送る</button>' : ''}</div>
+      <p class="room-st${NET.status === 'error' || NET.status === 'nolib' ? ' is-ng' : ''}">${st}</p>
+      <p class="room-note">このスマホが親になります。ゲーム中はこのアプリを開いたまま、画面をつけておいてください</p>
+      <button class="big is-red" data-act="roomClose">閉じる</button>
+    </section>`;
+  }
+  async function copyInvite() {
+    const url = inviteURL();
+    try { await navigator.clipboard.writeText(url); toast('URLをコピーしました'); }
+    catch (e) { window.prompt('このURLをコピーしてください', url); }
+  }
+  function shareInvite() { navigator.share({ title: 'すごろくクイズ', text: 'すごろくクイズに参加してね', url: inviteURL() }).catch(() => {}); }
+
+  // --- 参加（子） ---
+  function netSend(act, d) {
+    if (!NET.conn || !NET.conn.open) { toast('幹事のスマホとつながっていません'); return; }
+    try { NET.conn.send({ t: 'a', act, d }); } catch (e) { toast('送れませんでした'); }
+  }
+  async function joinRoom() {
+    NET.status = 'connecting'; render();
+    try { await loadScript(PEER_JS); } catch (e) { NET.status = 'nolib'; render(); return; }
+    const connect = () => {
+      if (NET.conn) { try { NET.conn.close(); } catch (e) { /* もう閉じている */ } }
+      const c = NET.peer.connect(PID(GUEST_ROOM), { reliable: true, serialization: 'json' });
+      NET.conn = c;
+      let opened = false;
+      const to = setTimeout(() => { if (!opened && NET.conn === c) { NET.status = 'fail'; render(); } }, 15000);
+      c.on('open', () => { opened = true; clearTimeout(to); NET.status = 'ok'; render(); });
+      c.on('data', d => { if (d && d.t === 's') { NET.pending = d.s; applyRemote(); } });
+      c.on('close', () => {
+        if (NET.conn !== c) return;
+        NET.status = 'lost'; render();
+        setTimeout(() => { if (NET.status === 'lost' && NET.conn === c) connect(); }, 2500);
+      });
+    };
+    if (NET.peer && !NET.peer.destroyed && NET.peer.open) { connect(); return; }
+    const peer = new window.Peer(undefined, peerOpts());
+    NET.peer = peer;
+    peer.on('open', connect);
+    peer.on('disconnected', () => { if (!peer.destroyed) { try { peer.reconnect(); } catch (e) { /* つなぎ直せない */ } } });
+    peer.on('error', e => {
+      if (e.type === 'peer-unavailable') { NET.status = 'fail'; render(); return; }
+      if (['network', 'server-error', 'socket-error', 'socket-closed', 'browser-incompatible', 'webrtc'].includes(e.type) && NET.status !== 'ok') { NET.status = 'fail'; render(); }
+    });
+  }
+  function guestWaitView() {
+    const S = NET.got ? state : null;
+    const msg = NET.status === 'fail' ? '幹事のスマホが見つかりませんでした'
+      : NET.status === 'nolib' ? '通信の準備ができませんでした'
+      : NET.status === 'lost' ? 'つなぎ直しています…'
+      : NET.status === 'ok' ? (S && S.screen === 'home' ? '幹事がゲームを始めるのを待っています' : 'つながりました')
+      : '幹事のスマホにつないでいます…';
+    const names = S ? (S.setup.players || []).map((n, i) => n.trim() || (S.setup.team ? `チーム${TEAM_ABC[i]}` : '')).filter(Boolean) : [];
+    const bad = NET.status === 'fail' || NET.status === 'nolib';
+    return `<main class="home guest">
+        <section class="hero"><div class="hero-top">
+          <p class="onair"><i></i>みんなのスマホで参加</p>
+          <h1 class="logo"><span class="l1">すごろく</span><span class="l2">クイズ</span></h1>
+          <div class="hero-die">${dieHTML('is-idle')}</div>
+        </div></section>
+        <section class="form">
+          <p class="g-room">部屋番号 <b>${esc(GUEST_ROOM)}</b></p>
+          <p class="g-msg${bad ? ' is-ng' : ''}">${esc(msg)}</p>
+          ${bad ? '<p class="g-help">幹事のスマホでアプリが開いたままになっているか、ネットにつながっているかを確認してください</p>' : ''}
+          ${names.length ? `<ul class="g-names">${names.map((n, i) => `<li style="--pc:${COLORS[i]}">${miniPawn(COLORS[i], n.slice(0, 1))}<span>${esc(n)}</span></li>`).join('')}</ul>` : ''}
+        </section>
+      </main>
+      <footer class="act is-home">
+        ${bad ? '<button class="big is-red" data-act="retry">もう一度つなぐ</button>' : ''}
+        <button class="link" data-act="leave">ひとりで遊ぶ画面へ</button>
+      </footer>`;
+  }
+  // 届いた状態を映す。駒の移動やサイコロは、前の状態との差から再生する
+  async function applyRemote() {
+    if (NET.applying) return;
+    NET.applying = true;
+    try {
+      while (NET.pending) {
+        const S = NET.pending; NET.pending = null;
+        const old = state.game, ng = S.game;
+        const live = NET.got && old && ng && S.screen === 'game' && state.screen === 'game' && old.board.seed === ng.board.seed && $('.mapwrap');
+        const prev = old ? { phase: old.phase, turn: old.turn, ok: old.ok, winner: old.winner, q: old.q && old.q.id, run: old.q && old.q.runAt } : {};
+        const prevScreen = state.screen;
+        if (live) {
+          if ((ng.rollId || 0) !== (old.rollId || 0) && ng.dice) {
+            busy = true;
+            camTo(old.players[ng.turn].pos);
+            try { await rollDice(ng.dice, !!ng.realRoll); } catch (e) { /* 演出の失敗は無視 */ }
+            old.rollId = ng.rollId; old.dice = ng.dice;
+          }
+          const order = [ng.turn, ...ng.players.map((_, i) => i).filter(i => i !== ng.turn)];
+          old.turn = ng.turn;
+          for (const i of order) {
+            const d = ng.players[i].pos - old.players[i].pos;
+            if (!d) continue;
+            busy = true;
+            try { await walk(i, d, { ignoreStop: true, count: d > 0 && i === ng.turn }); } catch (e) { /* 演出の失敗は無視 */ }
+          }
+          busy = false;
+        }
+        const G2 = S.game;
+        state = { ...state, screen: S.screen, game: G2, setup: { ...state.setup, ...S.setup } };
+        if (!live) V.built = null;
+        NET.got = true;
+        menuOpen = menuOpen && S.screen === 'game';
+        render();
+        if (live || (prevScreen === 'game' && S.screen === 'result')) guestEffects(prev, prevScreen, S);
+        else if (S.screen === 'game' && G2 && G2.phase === 'turn') { layoutPieces(false); camTo(cur().pos, true); callTurn(); }
+        // 協力クイズの残り時間
+        if (G2 && G2.q && G2.q.kind === 'coop' && G2.q.runAt && G2.phase === 'question') {
+          if (!V.coop) { const left = G2.q.sec * 1000 - (Date.now() - G2.q.runAt); coopTicker(performance.now() + Math.max(0, left) / SPEED, G2.q.sec); }
+        } else if (V.coop) stopCoop();
+      }
+    } finally { NET.applying = false; busy = false; }
+  }
+  function guestEffects(prev, prevScreen, S) {
+    const g = S.game;
+    if (prevScreen !== 'result' && S.screen === 'result') { sound('drum'); setTimeout(() => { sound('fanfare'); confetti(60); }, RM ? 0 : 1500); return; }
+    if (!g) return;
+    if (prev.winner === null && g.winner !== null) {
+      telop(`<small>GOAL</small><b>${esc(g.players[g.winner].name)}</b><span>がゴール！</span>`, 'is-goal', 2200);
+      sound('fanfare'); confetti(44);
+    }
+    if (g.phase === 'question' && prev.q !== (g.q && g.q.id)) sound('question');
+    if (g.phase === 'reveal' && prev.phase !== 'reveal' && g.q && (g.q.all || g.ok === null)) sound('reveal');
+    if (g.phase === 'reveal' && prev.ok == null && g.ok != null && g.q && !g.q.all) {
+      sound(g.ok ? 'correct' : 'wrong'); buzz(g.ok ? 30 : [60, 40, 60]);
+      stamp(g.ok); if (g.ok) confetti(22);
+    }
+    if (g.phase === 'landed' && prev.phase !== 'landed') {
+      const c = cellAt(cur().pos);
+      if (c.t === 'stop' && g.dice && cur().pos - g.from < g.dice) { telop(`<small>STOP</small><b>${esc(c.name)}</b><span>で足止め</span>`, 'is-stop', 1500); sfx('gate'); }
+      else sound('reveal');
+    }
+    if (g.phase === 'question' && g.q && g.q.runAt && !prev.run) sfx('pop');
+    if (g.phase === 'turn' && (prev.turn !== g.turn || prev.phase !== 'turn')) { layoutPieces(true); camTo(cur().pos); sfx('pop'); if (prev.turn !== g.turn) callTurn(); }
+  }
+
   // ---------- オフライン対応（ホーム画面に追加して使う） ----------
   if ('serviceWorker' in navigator && location.protocol === 'https:') {
     // 新しい版が届いたら、すぐ切り替える（古い版のまま残らないように）
@@ -2461,6 +2749,8 @@ body[data-screen="result"] .act { min-height: 0; }
   }
 
   render();
+  if (GUEST_ROOM) joinRoom();
+  else if (state.roomOn && state.room) hostRoom();
 })();
 
 </script>
