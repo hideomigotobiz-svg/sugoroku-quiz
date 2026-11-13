@@ -455,6 +455,17 @@ body[data-screen="result"] .act { min-height: 0; }
 .dpick button:disabled { opacity: .5; }
 .dpick .die2d { width: 40px; height: 40px; --s: 40px; }
 
+/* チーム戦 */
+.seg.is-mode { margin-top: 18px; }
+.pin.is-team { grid-template-columns: 30px minmax(0, 1fr) auto; row-gap: 0; padding-bottom: 6px; }
+.pin.is-team .mem { grid-column: 2 / -1; font-size: 15px; font-weight: 500; padding: 4px 6px 8px; }
+.who-t .ans { display: block; font-size: 13px; font-weight: 700; color: var(--sub); margin-top: 2px; }
+.who-t .ans b { color: var(--ink); font-size: 15px; font-weight: 900; box-shadow: none; padding: 0; background: none; }
+.q-ans { margin-left: 6px; font-size: 13px; font-weight: 700; opacity: .85; }
+.q-ans::before { content: '回答 '; font-size: 11px; opacity: .8; }
+.rank .nm small { display: block; font-size: 11px; font-weight: 700; color: var(--sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.win-mem { margin-top: 4px; font-size: 14px; font-weight: 700; text-align: center; }
+
 </style>
 </head>
 <body>
@@ -717,7 +728,7 @@ body[data-screen="result"] .act { min-height: 0; }
   function defaultState() {
     return {
       v: 2, screen: 'home',
-      setup: { players: ['', '', '', ''], len: 20, level: 'normal', drinks: true, ng: [], sound: true, realDice: false },
+      setup: { players: ['', '', '', ''], len: 20, level: 'normal', drinks: true, ng: [], sound: true, realDice: false, team: false, members: [] },
       game: null,
     };
   }
@@ -804,7 +815,7 @@ body[data-screen="result"] .act { min-height: 0; }
 
   // ---------- 盤面（マスの並び） ----------
   function makeBoard(len, drinks, ng) {
-    const genres = shuffle(Object.keys(GENRES).filter(g => !ng.includes(g) && g !== 'spi')).slice(0, 6);
+    const genres = shuffle(Object.keys(GENRES).filter(g => !ng.includes(g) && g !== 'spi'));
     const cells = Array.from({ length: len + 1 }, () => null);
     cells[0] = { t: 'start' };
     cells[len] = { t: 'goal' };
@@ -1209,15 +1220,23 @@ body[data-screen="result"] .act { min-height: 0; }
     const ok = q => !used.has(q.id) && !blocked.has(q.id) && !ng.has(q.genre) && (!q.valid_until || q.valid_until >= today) && modeOf(q);
     let pool = DB.filter(q => ok(q) && (!genre || q.genre === genre));
     if (!pool.length) pool = DB.filter(ok);
+    if (!pool.length) return null;
     const ease = q => q.expected_correct_rate ?? 0.6;
-    pool.sort((a, b) => Math.abs(ease(a) - target) - Math.abs(ease(b) - target));
-    const top = pool.slice(0, 10);
-    return top[rnd(top.length)] || null;
+    const seen = new Set(state.seen || []);
+    const fresh = pool.filter(q => !seen.has(q.id));
+    if (fresh.length >= 6) pool = fresh; // 最近のゲームで出た問題は、ほかに十分あるなら出さない
+    const w = pool.map(q => Math.exp(-Math.pow((ease(q) - target) / 0.09, 2)) + 0.02);
+    let x = Math.random() * w.reduce((a, b) => a + b, 0);
+    for (let i = 0; i < pool.length; i++) { x -= w[i]; if (x <= 0) return pool[i]; }
+    return pool[pool.length - 1];
   }
 
   // ---------- 駒・カメラ・演出 ----------
   const G = () => state.game;
   const cur = () => G().players[G().turn];
+  const TEAM_ABC = 'ABCDEF';
+  const answerer = p => (p && p.members && p.members.length ? p.members[(p.mi || 0) % p.members.length] : '');
+  const splitMembers = t => String(t || '').split(/[\s、,，・/／]+/).map(x => x.trim()).filter(Boolean).slice(0, 8);
   const cellAt = i => G().board.cells[i];
   let busy = false; // 駒やサイコロのアニメーション中は操作を受け付けない
   // 画面に出ているもの（保存しない）
@@ -1479,15 +1498,16 @@ body[data-screen="result"] .act { min-height: 0; }
     if (n) n.textContent = String(Math.max(0, total - done));
   }
 
-  // サイコロ: 手元で振る → 盤の奥に放る → 1回弾む → 手前へ4回ゴロゴロ転がる（だんだん遅く）→ 揺り戻してコトンと出目が決まる
+  // サイコロ: 手元で振る → 盤へ放る（前へ回転しながら）→ 着地 → その勢いのまま奥へ3回ゴロゴロ（だんだん遅く）→ 揺り戻してコトンと出目が決まる
   async function rollDice(val, quick) {
     const anim = animate, wait = sleep, sfx0 = sfx, buzz0 = buzz;
     const r = stageRect();
     const src = $('.die-btn .die');
     const S = 88;
-    const ROLLS = 4, STEP = S * 0.6; // 1回転がるごとに進む距離（手前＝画面下へ）
-    const tx = r.left + r.width / 2, ty = r.top + r.height * 0.6;
-    const ly = Math.max(r.top + S * 0.7, ty - ROLLS * STEP); // 着地点（奥）
+    const ROLLS = 3, STEP = S * 0.62; // 1回転がるごとに進む距離（奥＝画面上へ）
+    const tx = r.left + r.width / 2, ty = r.top + r.height * 0.42; // 止まる場所
+    const ly = Math.min(r.top + r.height - S * 0.6, ty + ROLLS * STEP); // 着地点（手前）
+    const F = 0.94; // 止まったときの大きさ（奥ほど少し小さく見える）
     let sx = tx, sy = innerHeight - 150;
     if (src) { const b = src.getBoundingClientRect(); sx = b.left + b.width / 2; sy = b.top + b.height / 2; src.style.visibility = 'hidden'; }
     const el = fxAdd(`<div class="dstage"><i class="ds-shadow"></i><div class="ds-die">${dieHTML()}</div>
@@ -1504,7 +1524,7 @@ body[data-screen="result"] .act { min-height: 0; }
       sh.style.opacity = (0.3 * k).toFixed(2);
     };
     if (RM || quick) {
-      put(tx, ty, 0, 1, 0, 0, 0);
+      put(tx, ty, 0, F, 0, 0, 0);
       sfx('set'); el.classList.add('is-set');
       await sleep(1100);
       el.remove();
@@ -1522,7 +1542,7 @@ body[data-screen="result"] .act { min-height: 0; }
     }
     if (skipped) {
       el.classList.remove('is-tame'); el.classList.add('is-set');
-      put(tx, ty, 0, 1, 0, 0, 0);
+      put(tx, ty, 0, F, 0, 0, 0);
       sfx0('set');
       await wait(650);
     }
@@ -1536,57 +1556,57 @@ body[data-screen="result"] .act { min-height: 0; }
     const sfx = n => { if (!skipped) sfx0(n); };
     const buzz = v => { if (!skipped) buzz0(v); };
     sound('dice'); buzz(20);
-    const T = { shake: 300, fly: 560, b1: 240 };
-    const spinTotal = T.fly + T.b1;
-    const turnsX = 360 * 2, turnsY = 360 + 180, turnsZ = 140;
-    // 空中のきりもみは着地までに収め、そのあとは前転だけにする
-    const rot = ms => { const k = clamp(ms / spinTotal, 0, 1), e = 1 - (1 - k) * (1 - k); return [turnsX * (1 - e), turnsY * (1 - e), turnsZ * (1 - e)]; };
-    const R0 = ROLLS * 90; // 前転の開始角（ここから 0 まで転がると出目の面が手前に来る）
+    const T = { shake: 280, fly: 520, land: 110 };
+    // 前転の角度は「投げた瞬間 → 止まる」までひと続き。空中で 1回転半、地面で 3回（90°ずつ）
+    const AIR = 360 + 180, R0 = AIR + ROLLS * 90;
     const s0 = 0.62;
-    const scAt = y => 0.86 + 0.14 * clamp((y - ly) / (ty - ly || 1), 0, 1); // 手前に来るほど少し大きく
+    const scAt = y => F + (1 - F) * clamp((y - ty) / (ly - ty || 1), 0, 1); // 奥に行くほど少し小さく
+    // 空中だけの横ぶれ（着地までに消える）
+    const wob = k => { const d = (1 - k) * (1 - k); return [34 * d * Math.sin(k * 9), 26 * d * Math.cos(k * 7)]; };
     // 手元でカラカラ
     await animate(T.shake, t => {
       const j = Math.sin(t * Math.PI * 7);
-      put(sx + j * 5, sy + Math.cos(t * 40) * 2, 0, s0 + 0.05 * Math.sin(t * Math.PI), turnsX + j * 26, turnsY + j * 30, turnsZ + j * 14, R0);
+      put(sx + j * 5, sy + Math.cos(t * 40) * 2, 0, s0 + 0.05 * Math.sin(t * Math.PI), j * 20, j * 26, j * 12, -R0);
     });
-    // 盤の奥へ放る
+    // 盤へ放る。進む向き（奥）に回りながら、ほぼ一定の速さで回転
+    const peak = Math.min(110, Math.max(40, (sy - ly) * 0.5));
     await animate(T.fly, t => {
-      const x = lerp(sx, tx, t), yb = lerp(sy, ly, t), lift = 170 * 4 * t * (1 - t) * (0.6 + 0.4 * t);
-      const [rx, ryy, rz] = rot(t * T.fly);
-      put(x, yb, lift, lerp(s0, scAt(ly), t), rx, ryy, rz, R0);
+      const x = lerp(sx, tx, t), yb = lerp(sy, ly, t), lift = peak * 4 * t * (1 - t);
+      const [ry, rz] = wob(t);
+      put(x, yb, lift, lerp(s0, 1, Math.min(1, t * 1.4)), 0, ry, rz, -R0 + AIR * t);
     });
-    sfx('die'); buzz(10);
-    // 1回だけ小さく弾む
-    await animate(T.b1, t => {
-      const [rx, ryy, rz] = rot(T.fly + t * T.b1);
-      const sq = t < 0.15 ? 1 - 0.1 * (1 - t / 0.15) : 1;
-      put(tx, ly, 38 * 4 * t * (1 - t), scAt(ly), rx, ryy, rz, R0, 2 - sq, sq);
+    sfx('die'); buzz(12);
+    // 着地でつぶれる（回転は止めない）
+    const ang0 = -ROLLS * 90;
+    await animate(T.land, t => {
+      const sq = 1 - 0.09 * Math.sin(Math.PI * t);
+      put(tx, ly, 0, 1, 0, 0, 0, ang0 + 10 * t, 2 - sq, sq);
     });
-    // 手前へゴロゴロ。角を支点に 90° ずつ転がり、そのたびに角が持ち上がる
-    const durs = [170, 200, 250, 340];
+    // 奥へゴロゴロ。角を支点に 90° ずつ転がり、そのたびに角が持ち上がる。だんだん遅く
+    const durs = [200, 260, 360];
     const corner = S * (Math.SQRT2 / 2 - 0.5) * 0.9;
     for (let i = 0; i < ROLLS; i++) {
-      const y0 = ly + i * STEP;
+      const y0 = ly - i * STEP;
       const last = i === ROLLS - 1;
+      const a0 = i === 0 ? 10 : 0; // 着地中に少し回った分
       await animate(durs[i], u => {
-        // 最後の1回は勢いが落ちて、ゆっくり倒れ込む
-        const e = last ? 1 - Math.pow(1 - u, 2.2) : u;
-        const ang = R0 - (i + e) * 90;
-        const y = y0 + STEP * e;
+        const e = last ? 1 - Math.pow(1 - u, 2.4) : u;
+        const ang = ang0 + i * 90 + a0 + (90 - a0) * e;
+        const y = y0 - STEP * e;
         put(tx, y, corner * Math.sin(Math.PI * e), scAt(y), 0, 0, 0, ang);
       });
       sfx('die'); buzz(last ? 14 : 6);
     }
     // 揺り戻し（少し行き過ぎて戻る）
     el.classList.add('is-tame');
-    await animate(300, t => {
-      const w = 9 * Math.sin(t * Math.PI) * (1 - t * 0.4);
-      put(tx, ty, corner * 0.35 * Math.sin(t * Math.PI), 1, 0, 0, 0, -w);
+    await animate(280, t => {
+      const w = 8 * Math.sin(t * Math.PI) * (1 - t * 0.4);
+      put(tx, ty, corner * 0.3 * Math.sin(t * Math.PI), F, 0, 0, 0, w);
     });
     if (skipped) return;
     sfx('set'); buzz(26);
     el.classList.remove('is-tame'); el.classList.add('is-set');
-    animate(260, t => { const s = Math.exp(-4 * t) * Math.cos(t * 8); put(tx, ty, 0, 1, 0, 0, 0, 0, 1 + 0.1 * s, 1 - 0.12 * s); });
+    animate(260, t => { const k = Math.exp(-4 * t) * Math.cos(t * 8); put(tx, ty, 0, F, 0, 0, 0, 0, 1 + 0.08 * k, 1 - 0.1 * k); });
     await sleep(120);
     sfx('pop');
     await sleep(760);
@@ -1596,11 +1616,18 @@ body[data-screen="result"] .act { min-height: 0; }
   // ---------- ゲーム進行 ----------
   function startGame() {
     const s = state.setup;
-    const names = s.players.map(n => n.trim()).filter(Boolean);
-    if (names.length < 2) { toast('2人以上の名前を入れてください'); return; }
+    const mem = s.members || [];
+    const ent = s.players.map((n, i) => {
+      const ms = s.team ? splitMembers(mem[i]) : [];
+      const name = n.trim() || (s.team && ms.length ? `チーム${TEAM_ABC[i]}` : '');
+      return { name, ms };
+    }).filter(e => e.name);
+    const names = ent.map(e => e.name);
+    if (names.length < 2) { toast(s.team ? '2チーム以上入れてください' : '2人以上の名前を入れてください'); return; }
     state.game = {
       board: makeBoard(s.len, s.drinks, s.ng),
-      players: names.map((name, i) => ({ name, color: COLORS[i], pos: 0, skip: false })),
+      players: ent.map((e, i) => ({ name: e.name, color: COLORS[i], pos: 0, skip: false, members: e.ms, mi: 0 })),
+      team: !!s.team,
       turn: 0, phase: 'turn', from: 0, q: null, picked: null, ok: null, allOk: [], dice: null,
       challenge: false, msg: '', res: null, after: null, usedQ: [], hist: [], winner: null, asked: 0,
     };
@@ -1713,6 +1740,7 @@ body[data-screen="result"] .act { min-height: 0; }
     const q = pickQuestion(genre || gs[rnd(gs.length)], !!hard);
     if (!q) { toast('出せる問題がなくなりました'); finishTurn(''); return; }
     g.usedQ.push(q.id); g.asked++;
+    state.seen = (state.seen || []).filter(id => id !== q.id).concat(q.id).slice(-400);
     g.q = { id: q.id, mode: modeOf(q), hard: !!hard, all: !!all, kind: kind || (all ? 'all' : 'genre') };
     g.picked = null; g.ok = null; g.allOk = [];
     g.phase = 'question';
@@ -1852,6 +1880,7 @@ body[data-screen="result"] .act { min-height: 0; }
     const g = G();
     if (busy) return;
     if (g.after === 'end') { state.screen = 'result'; sound('drum'); commit(); setTimeout(() => { sound('fanfare'); confetti(60); }, RM ? 0 : 1500); return; }
+    { const pv = cur(); if (pv.members && pv.members.length) pv.mi = (pv.mi || 0) + 1; }
     // 次の人へ（1回休みは飛ばす）
     const n = g.players.length, skipped = [];
     let t = g.turn;
@@ -1939,7 +1968,7 @@ body[data-screen="result"] .act { min-height: 0; }
     return `<div class="sheet-back"></div><section class="qcard is-${kind}">
       <div class="q-head">
         <span class="q-no"><small>Q</small>${g.asked}</span>
-        <div class="q-who">${g.q.all ? `<b>全員クイズ</b>` : `${miniPawn(p.color)}<b>${esc(p.name)}</b>`}${title && !g.q.all ? `<em>${esc(title)}</em>` : ''}</div>
+        <div class="q-who">${g.q.all ? `<b>全員クイズ</b>` : `${miniPawn(p.color)}<b>${esc(p.name)}</b>${answerer(p) ? `<span class="q-ans">${esc(answerer(p))}</span>` : ''}`}${title && !g.q.all ? `<em>${esc(title)}</em>` : ''}</div>
         <span class="q-genre" style="--gc:${gcol}">${esc(gname)}</span>
       </div>
       <p class="q-stake">${stake}</p>
@@ -1955,7 +1984,8 @@ body[data-screen="result"] .act { min-height: 0; }
   function actionHTML() {
     const g = G(), p = cur(), c = cellAt(p.pos);
     const big = (act, label, cls = '', extra = '') => `<button class="big ${cls}" data-act="${act}" ${extra}>${label}</button>`;
-    const who = (tail = 'の番') => `<div class="who" style="--pc:${p.color}">${miniPawn(p.color, p.name.slice(0, 1))}<div class="who-t"><b>${esc(p.name)}</b><small>${tail}</small></div></div>`;
+    const ans = answerer(p);
+    const who = (tail = 'の番') => `<div class="who" style="--pc:${p.color}">${miniPawn(p.color, p.name.slice(0, 1))}<div class="who-t"><b>${esc(p.name)}</b><small>${tail}</small>${ans ? `<span class="ans">回答者 <b>${esc(ans)}</b></span>` : ''}</div></div>`;
     switch (g.phase) {
       case 'turn':
       case 'rolling': {
@@ -1994,13 +2024,13 @@ body[data-screen="result"] .act { min-height: 0; }
           <p class="msg">${esc(g.msg)}</p>${btn}`;
       }
       case 'question':
-        if (g.q.mode === 'choice4') return `<p class="hint">${g.q.all ? 'わかった人が答えをタップ' : `${esc(p.name)} が答えをタップ`}</p>`;
+        if (g.q.mode === 'choice4') return `<p class="hint">${g.q.all ? 'わかった人が答えをタップ' : `${esc(answerer(p) || p.name)} が答えをタップ`}</p>`;
         return `<p class="hint">${g.q.all ? 'わかった人は手を挙げて答えて！' : '声に出して答えてから'}</p>${big('show', '答えを見る')}`;
       case 'reveal':
         if (g.q.all) {
-          return `<p class="hint">正解した人をタップ（何人でも）</p>
+          return `<p class="hint">${g.team ? '正解したチームをタップ（いくつでも）' : '正解した人をタップ（何人でも）'}</p>
             <div class="pick">${g.players.map((pl, i) => `<button class="pchip${g.allOk.includes(i) ? ' is-on' : ''}" style="--pc:${pl.color}" data-act="allOk" data-i="${i}">${miniPawn(pl.color)}${esc(pl.name)}</button>`).join('')}</div>
-            ${big('afterReveal', g.allOk.length ? `決定（${g.allOk.length}人が正解）` : '正解者なしで進む')}`;
+            ${big('afterReveal', g.allOk.length ? `決定（${g.allOk.length}${g.team ? 'チーム' : '人'}が正解）` : '正解者なしで進む')}`;
         }
         if (g.ok !== null) return big('afterReveal', g.ok ? 'やった！ 次へ' : '次へ');
         return `<p class="hint">みんなで判定</p><div class="judge">${big('judge', '<i>×</i>まちがえた', 'is-white', 'data-v="0"')}${big('judge', '<i>○</i>正解した！', 'is-red', 'data-v="1"')}</div>`;
@@ -2076,7 +2106,7 @@ body[data-screen="result"] .act { min-height: 0; }
 
   function resultView() {
     const g = G(), len = g.board.len;
-    const rk = g.players.map((p, i) => ({ ...p, i })).sort((a, b) => b.pos - a.pos);
+    const rk = g.players.map((p, i) => ({ ...p, i })).sort((a, b) => (b.i === g.winner) - (a.i === g.winner) || b.pos - a.pos);
     const w = rk[0];
     return `<main class="result">
       <div class="res-hero">
@@ -2087,11 +2117,12 @@ body[data-screen="result"] .act { min-height: 0; }
           ${pawnSVG(w.color, w.name.slice(0, 1))}
         </div>
         <h1 class="winner"><span>${esc(w.name)}</span></h1>
-        <p class="win-sub">${w.pos >= len ? 'お城に一番乗り！ 優勝' : '一番進んだ人の優勝'}</p>
+        ${w.members && w.members.length ? `<p class="win-mem">${esc(w.members.join('・'))}</p>` : ''}
+        <p class="win-sub">${g.winner === w.i ? 'お城に一番乗り！ 優勝' : `一番進んだ${g.team ? 'チーム' : '人'}の優勝`}</p>
       </div>
       <ol class="rank">${rk.map((p, n) => `<li style="--pc:${p.color};--at:${Math.min(1, p.pos / len)};--i:${n}">
         <span class="rk">${n + 1}<small>位</small></span>${miniPawn(p.color, p.name.slice(0, 1))}
-        <span class="nm">${esc(p.name)}</span><span class="ps">${p.pos >= len ? 'ゴール' : `${p.pos}マス`}</span>
+        <span class="nm">${esc(p.name)}${p.members && p.members.length ? `<small>${esc(p.members.join('・'))}</small>` : ''}</span><span class="ps">${g.winner === p.i ? 'ゴール' : `${p.pos}マス`}</span>
         <span class="bar-t"><i></i></span></li>`).join('')}</ol>
       <p class="sub">ぜんぶで ${g.asked}問</p>
     </main>
@@ -2132,13 +2163,15 @@ body[data-screen="result"] .act { min-height: 0; }
           ${heroArt()}
         </section>
         <section class="form">
-          ${h(1, 'プレイヤー', '2〜6人')}
-          <div class="players">${s.players.map((n, i) => `<div class="pin" style="--pc:${COLORS[i]}">
-            ${miniPawn(COLORS[i], (n.trim() || String(i + 1)).slice(0, 1))}
-            <input id="pl-${i}" data-player="${i}" value="${esc(n)}" placeholder="プレイヤー${i + 1}" maxlength="10" enterkeyhint="next" autocomplete="off">
+          <div class="seg is-mode">${[[false, '個人戦'], [true, 'チーム戦']].map(([v, l]) => `<button class="${!!s.team === v ? 'is-on' : ''}" data-act="team" data-v="${v ? 1 : 0}">${l}</button>`).join('')}</div>
+          ${h(1, s.team ? 'チーム' : 'プレイヤー', s.team ? '2〜6チーム ・ メンバーは順番に回答' : '2〜6人')}
+          <div class="players">${s.players.map((n, i) => `<div class="pin${s.team ? ' is-team' : ''}" style="--pc:${COLORS[i]}">
+            ${miniPawn(COLORS[i], (n.trim() || (s.team ? TEAM_ABC[i] : String(i + 1))).slice(0, 1))}
+            <input id="pl-${i}" data-player="${i}" value="${esc(n)}" placeholder="${s.team ? `チーム${TEAM_ABC[i]}` : `プレイヤー${i + 1}`}" maxlength="10" enterkeyhint="next" autocomplete="off">
             ${s.players.length > 2 ? `<button class="x" data-act="delPlayer" data-i="${i}" aria-label="削除">×</button>` : ''}
+            ${s.team ? `<input class="mem" data-member="${i}" value="${esc((s.members || [])[i] || '')}" placeholder="メンバー（例：ゆうた さき）" maxlength="60" enterkeyhint="next" autocomplete="off">` : ''}
           </div>`).join('')}</div>
-          ${s.players.length < 6 ? `<button class="add" data-act="addPlayer">＋ プレイヤーを追加</button>` : ''}
+          ${s.players.length < 6 ? `<button class="add" data-act="addPlayer">＋ ${s.team ? 'チーム' : 'プレイヤー'}を追加</button>` : ''}
           ${h(2, 'コースの長さ')}
           <div class="seg">${[[10, 'お試し'], [15, 'さくっと'], [20, 'ふつう'], [30, 'じっくり']].map(([v, l]) => `<button class="${s.len === v ? 'is-on' : ''}" data-act="len" data-v="${v}">${l}<small>${v}マス</small></button>`).join('')}</div>
           ${h(3, '問題の難しさ')}
@@ -2186,10 +2219,15 @@ body[data-screen="result"] .act { min-height: 0; }
   const actions = {
     start: startGame,
     resume() { state.screen = 'game'; Sound.unlock(); Sfx.unlock(); commit(); },
-    again() { state.setup.players = state.game.players.map(p => p.name); startGame(); },
+    again() {
+      state.setup.players = state.game.players.map(p => p.name);
+      state.setup.members = state.game.players.map(p => (p.members || []).join(' '));
+      startGame();
+    },
     home() { state.screen = 'home'; commit(); },
     addPlayer() { if (state.setup.players.length < 6) { state.setup.players.push(''); commit(); document.getElementById(`pl-${state.setup.players.length - 1}`)?.focus(); } },
-    delPlayer(d) { state.setup.players.splice(Number(d.i), 1); commit(); },
+    delPlayer(d) { state.setup.players.splice(Number(d.i), 1); (state.setup.members || []).splice(Number(d.i), 1); commit(); },
+    team(d) { state.setup.team = d.v === '1'; if (!state.setup.members) state.setup.members = []; commit(); },
     len(d) { state.setup.len = Number(d.v); commit(); },
     level(d) { state.setup.level = d.v; commit(); },
     drinks(d) { state.setup.drinks = d.v === '1'; commit(); },
@@ -2226,11 +2264,13 @@ body[data-screen="result"] .act { min-height: 0; }
     if (fn) fn(b.dataset, b);
   });
   document.addEventListener('input', e => {
+    const mi = e.target.dataset.member;
+    if (mi !== undefined) { (state.setup.members = state.setup.members || [])[Number(mi)] = e.target.value; save(); return; }
     const i = e.target.dataset.player;
     if (i === undefined) return;
     state.setup.players[Number(i)] = e.target.value; save();
     const t = e.target.parentElement.querySelector('.pawn text');
-    if (t) t.textContent = (e.target.value.trim() || String(Number(i) + 1)).slice(0, 1);
+    if (t) t.textContent = (e.target.value.trim() || (state.setup.team ? TEAM_ABC[Number(i)] : String(Number(i) + 1))).slice(0, 1);
   });
   document.addEventListener('keydown', e => {
     if (e.key !== 'Enter' || e.target.dataset.player === undefined) return;
