@@ -485,6 +485,19 @@ body[data-screen="result"] .act { min-height: 0; }
 .coop-ex { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 4px; padding: 0; list-style: none; }
 .coop-ex li { border: 2px solid var(--ink); border-radius: 999px; padding: 3px 10px; font-size: 14px; font-weight: 700; background: var(--white); }
 
+/* チーム戦の設定: チームごとのカード */
+.teams { display: grid; gap: 12px; }
+.tcard { border: 2.5px solid var(--ink); border-radius: 10px; background: var(--white); box-shadow: 0 4px 0 var(--ink); overflow: hidden; }
+.tc-head { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 4px 4px 4px 10px; background: var(--pc); border-bottom: 2.5px solid var(--ink); }
+.tc-head input { border: 0; padding: 9px 8px; font-size: 19px; font-weight: 900; min-width: 0; background: rgba(255, 255, 255, .92); border-radius: 6px; }
+.tc-head input::placeholder { color: #9A9A93; font-weight: 700; }
+.tc-head input:focus { outline: 2px solid var(--ink); }
+.tc-head .x { border: 0; background: transparent; color: var(--white); font-size: 22px; width: 40px; height: 40px; text-shadow: 0 1px 0 rgba(0, 0, 0, .4); }
+.tc-mem { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 8px; padding: 6px 10px 8px; }
+.tc-mem span { font-size: 12px; font-weight: 900; color: var(--sub); }
+.tc-mem input { border: 0; border-bottom: 1.5px dashed #C9C9C2; padding: 8px 4px; font-size: 16px; font-weight: 500; min-width: 0; background: transparent; border-radius: 0; }
+.tc-mem input:focus { outline: none; background: #FFF6BF; }
+
 </style>
 </head>
 <body>
@@ -2287,13 +2300,22 @@ body[data-screen="result"] .act { min-height: 0; }
         </section>
         <section class="form">
           <div class="seg is-mode">${[[false, '個人戦'], [true, 'チーム戦']].map(([v, l]) => `<button class="${!!s.team === v ? 'is-on' : ''}" data-act="team" data-v="${v ? 1 : 0}">${l}</button>`).join('')}</div>
-          ${h(1, s.team ? 'チーム' : 'プレイヤー', s.team ? '2〜6チーム ・ メンバーは順番に回答' : '2〜6人')}
-          <div class="players">${s.players.map((n, i) => `<div class="pin${s.team ? ' is-team' : ''}" style="--pc:${COLORS[i]}">
-            ${miniPawn(COLORS[i], (n.trim() || (s.team ? TEAM_ABC[i] : String(i + 1))).slice(0, 1))}
-            <input id="pl-${i}" data-player="${i}" value="${esc(n)}" placeholder="${s.team ? `チーム${TEAM_ABC[i]}` : `プレイヤー${i + 1}`}" maxlength="10" enterkeyhint="next" autocomplete="off">
+          ${h(1, s.team ? 'チーム' : 'プレイヤー', s.team ? '2〜6チーム ・ 駒はチームに1つ' : '2〜6人')}
+          ${s.team ? `<div class="teams">${s.players.map((n, i) => `<div class="tcard" style="--pc:${COLORS[i]}">
+            <div class="tc-head">
+              ${miniPawn(COLORS[i], (n.trim() || TEAM_ABC[i]).slice(0, 1))}
+              <input id="pl-${i}" data-player="${i}" value="${esc(n)}" placeholder="チーム${TEAM_ABC[i]}" maxlength="10" enterkeyhint="next" autocomplete="off" aria-label="チーム名">
+              ${s.players.length > 2 ? `<button class="x" data-act="delPlayer" data-i="${i}" aria-label="このチームを削除">×</button>` : ''}
+            </div>
+            <label class="tc-mem"><span>メンバー</span>
+              <input class="mem" data-member="${i}" value="${esc((s.members || [])[i] || '')}" placeholder="例：ゆうた さき（なくてもOK）" maxlength="60" enterkeyhint="next" autocomplete="off">
+            </label>
+          </div>`).join('')}</div>`
+          : `<div class="players">${s.players.map((n, i) => `<div class="pin" style="--pc:${COLORS[i]}">
+            ${miniPawn(COLORS[i], (n.trim() || String(i + 1)).slice(0, 1))}
+            <input id="pl-${i}" data-player="${i}" value="${esc(n)}" placeholder="プレイヤー${i + 1}" maxlength="10" enterkeyhint="next" autocomplete="off">
             ${s.players.length > 2 ? `<button class="x" data-act="delPlayer" data-i="${i}" aria-label="削除">×</button>` : ''}
-            ${s.team ? `<input class="mem" data-member="${i}" value="${esc((s.members || [])[i] || '')}" placeholder="メンバー（例：ゆうた さき）" maxlength="60" enterkeyhint="next" autocomplete="off">` : ''}
-          </div>`).join('')}</div>
+          </div>`).join('')}</div>`}
           ${s.players.length < 6 ? `<button class="add" data-act="addPlayer">＋ ${s.team ? 'チーム' : 'プレイヤー'}を追加</button>` : ''}
           ${h(2, 'コースの長さ')}
           <div class="seg">${[[10, 'お試し'], [15, 'さくっと'], [20, 'ふつう'], [30, 'じっくり']].map(([v, l]) => `<button class="${s.len === v ? 'is-on' : ''}" data-act="len" data-v="${v}">${l}<small>${v}マス</small></button>`).join('')}</div>
@@ -2350,7 +2372,14 @@ body[data-screen="result"] .act { min-height: 0; }
     home() { state.screen = 'home'; commit(); },
     addPlayer() { if (state.setup.players.length < 6) { state.setup.players.push(''); commit(); document.getElementById(`pl-${state.setup.players.length - 1}`)?.focus(); } },
     delPlayer(d) { state.setup.players.splice(Number(d.i), 1); (state.setup.members || []).splice(Number(d.i), 1); commit(); },
-    team(d) { state.setup.team = d.v === '1'; if (!state.setup.members) state.setup.members = []; commit(); },
+    team(d) {
+      const st = state.setup;
+      st.team = d.v === '1';
+      if (!st.members) st.members = [];
+      if (st.team && st.players.every(n => !n.trim()) && st.members.every(m => !String(m || '').trim())) { st.players = ['', '']; st.members = ['', '']; }
+      else if (!st.team && st.players.length < 4 && st.players.every(n => !n.trim())) st.players = ['', '', '', ''];
+      commit();
+    },
     len(d) { state.setup.len = Number(d.v); commit(); },
     level(d) { state.setup.level = d.v; commit(); },
     drinks(d) { state.setup.drinks = d.v === '1'; commit(); },
