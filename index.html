@@ -10,6 +10,19 @@
 <meta name="apple-mobile-web-app-title" content="すごろくクイズ">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
+<meta name="description" content="スマホ1台を回して遊べる、すごろく×クイズ。サイコロを振って、止まったマスのクイズに挑戦！チーム戦や、みんなのスマホで参加もできます。">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="すごろくクイズ">
+<meta property="og:title" content="すごろくクイズ｜二次会・飲み会で盛り上がるスマホゲーム">
+<meta property="og:description" content="スマホ1台を回して遊べる、すごろく×クイズ。サイコロを振って、止まったマスのクイズに挑戦！チーム戦や、みんなのスマホで参加もできます。">
+<meta property="og:url" content="https://hideomigotobiz-svg.github.io/sugoroku-quiz/">
+<meta property="og:image" content="https://hideomigotobiz-svg.github.io/sugoroku-quiz/ogp.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="すごろくクイズ｜二次会・飲み会で盛り上がるスマホゲーム">
+<meta name="twitter:description" content="スマホ1台を回して遊べる、すごろく×クイズ。サイコロを振って、止まったマスのクイズに挑戦！チーム戦や、みんなのスマホで参加もできます。">
+<meta name="twitter:image" content="https://hideomigotobiz-svg.github.io/sugoroku-quiz/ogp.png">
 <title>すごろくクイズ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700;900&display=swap">
 <style>
@@ -523,6 +536,23 @@ body[data-screen="result"] .act { min-height: 0; }
 .g-names { list-style: none; padding: 0; margin: 14px 0 0; display: grid; gap: 6px; }
 .g-names li { display: flex; align-items: center; gap: 10px; font-size: 17px; font-weight: 700; border-bottom: 2px solid var(--ink); padding: 4px; }
 
+/* シェア */
+.share-btn { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 16px auto 4px; border: 2.5px solid var(--ink); border-radius: 999px; background: var(--marker); color: var(--ink); font-size: 16px; font-weight: 900; padding: 10px 22px; box-shadow: 0 4px 0 var(--ink); }
+.share-btn:active { transform: translateY(4px); box-shadow: none; }
+.share-btn i { font-style: normal; font-size: 18px; }
+.home-links { display: flex; justify-content: center; flex-wrap: wrap; gap: 0 6px; }
+
+/* ハラハラ度・罰ゲーム */
+.seg-note { margin: 6px 2px 0; font-size: 12px; font-weight: 700; color: var(--sub); }
+.batsu { margin: 18px 16px 0; border: 3px solid var(--ink); border-radius: 12px; background: var(--white); box-shadow: 0 5px 0 var(--ink); padding: 12px 14px 8px; text-align: center; }
+.b-kick { margin: 0; display: flex; justify-content: center; align-items: center; gap: 8px; }
+.b-kick span { background: var(--onair); color: var(--white); font-weight: 900; font-size: 15px; padding: 3px 12px; transform: skewX(-8deg); letter-spacing: .1em; }
+.b-kick small { font-size: 12px; font-weight: 900; color: var(--sub); }
+.b-who { margin: 10px 0 2px; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 4px 10px; font-size: 18px; }
+.b-who b { font-weight: 900; margin-left: 4px; }
+.b-who span { font-size: 12px; color: var(--sub); font-weight: 700; }
+.b-txt { margin: 6px 0 4px; font-size: 22px; font-weight: 900; line-height: 1.4; }
+
 </style>
 </head>
 <body>
@@ -757,6 +787,13 @@ body[data-screen="result"] .act { min-height: 0; }
     lastfwd: { label: '救済', icon: '🤝', text: '救済！ 最下位の人が2マス進む' },
     topback: { label: '下剋上', icon: '⚡', text: '下剋上！ ほかのトップの人が2マス戻る' },
   };
+  // 結果発表で最下位がやる罰ゲーム（度合いを選べる）
+  const BATSU = {
+    soft: ['好きな食べ物を3つ、熱く語る', '最近あった「ちょっといい話」を発表', 'みんなに向かって全力の「ありがとう！」', '自分のいいところを3つ言う', '好きな歌のサビを10秒歌う', '変顔で記念写真', '何かのモノマネを1つ', '次のゲームの進行役をやる'],
+    normal: ['一発ギャグ', '初恋の話をする', '最近いちばん恥ずかしかった話', '隣の人のいいところを3つ全力でほめる', '好きなタイプを具体的に発表', 'スマホの写真を1枚、みんなに見せる（自分で選んでOK）', '全力のぶりっ子自己紹介', 'みんなが指名した人のモノマネ'],
+    hard: ['恋愛の失敗談を1つ', 'みんなから一言ずつ、愛をこめていじられる', '気になる人のイニシャル発表（いなければ好きな芸能人）', 'スマホの検索履歴を1つ公開', '次の1杯をおごる', '3分間、語尾に「にゃん」をつけて話す', '自分史上いちばんダサかった話', '優勝した人の言うことを1つ聞く（常識の範囲で）'],
+  };
+  const BATSU_LV = { soft: 'ゆるめ', normal: 'ふつう', hard: 'きつめ' };
   const DRINKS = {
     tequila: { label: 'テキーラ', icon: '🥃', text: 'テキーラマス！ 飲んだら2マス進む', bonus: 2 },
     mega: { label: 'メガジョッキ', icon: '🍺', text: 'メガジョッキマス！ 飲み干したら3マス進む', bonus: 3 },
@@ -785,7 +822,7 @@ body[data-screen="result"] .act { min-height: 0; }
   function defaultState() {
     return {
       v: 2, screen: 'home',
-      setup: { players: ['', '', '', ''], len: 20, level: 'normal', drinks: true, ng: [], sound: true, realDice: false, team: false, members: [] },
+      setup: { players: ['', '', '', ''], len: 20, level: 'normal', drinks: true, ng: [], sound: true, realDice: false, team: false, members: [], thrill: 'normal', batsu: 'none' },
       game: null,
     };
   }
@@ -877,7 +914,7 @@ body[data-screen="result"] .act { min-height: 0; }
   function buzz(ms) { try { navigator.vibrate && navigator.vibrate(ms); } catch (e) { /* 非対応 */ } }
 
   // ---------- 盤面（マスの並び） ----------
-  function makeBoard(len, drinks, ng, team) {
+  function makeBoard(len, drinks, ng, team, thrill = 'normal') {
     const genres = shuffle(Object.keys(GENRES).filter(g => !ng.includes(g) && g !== 'spi'));
     const cells = Array.from({ length: len + 1 }, () => null);
     cells[0] = { t: 'start' };
@@ -894,11 +931,15 @@ body[data-screen="result"] .act { min-height: 0; }
     });
     const inner = len - 1;
     const special = [];
-    for (let i = 0; i < Math.round(inner * 0.08); i++) special.push({ t: 'challenge' });
+    for (let i = 0; i < Math.round(inner * (thrill === 'thrill' ? 0.1 : 0.08)); i++) special.push({ t: 'challenge' });
     for (let i = 0; i < Math.round(inner * 0.08); i++) special.push({ t: 'all' });
     if (team) for (let i = 0; i < Math.max(1, Math.round(inner * 0.13)); i++) special.push({ t: 'coop' });
-    const ev = shuffle(Object.keys(EVENTS));
-    for (let i = 0; i < Math.round(inner * 0.14); i++) special.push({ t: 'event', e: ev[i % ev.length] });
+    // おだやか: 戻る系のイベントなし ／ ハラハラ: 落とし穴・下剋上が多め
+    const evPool = thrill === 'calm' ? ['fwd2', 'again', 'lastfwd', 'skip']
+      : thrill === 'thrill' ? ['back3', 'topback', 'back3', 'topback', 'skip', 'fwd2', 'again', 'lastfwd'] : Object.keys(EVENTS);
+    const ev = shuffle(evPool.slice());
+    const evN = Math.round(inner * (thrill === 'calm' ? 0.12 : thrill === 'thrill' ? 0.2 : 0.14));
+    for (let i = 0; i < evN; i++) special.push({ t: 'event', e: ev[i % ev.length] });
     shuffle(special);
     const free = Array.from({ length: inner - 1 }, (_, i) => i + 2).filter(i => !cells[i]);
     const k = Math.min(special.length, free.length), step = free.length / Math.max(1, k), used = new Set();
@@ -1694,7 +1735,8 @@ body[data-screen="result"] .act { min-height: 0; }
     const names = ent.map(e => e.name);
     if (names.length < 2) { toast(s.team ? '2チーム以上入れてください' : '2人以上の名前を入れてください'); return; }
     state.game = {
-      board: makeBoard(s.len, s.drinks, s.ng, s.team),
+      board: makeBoard(s.len, s.drinks, s.ng, s.team, s.thrill || 'normal'),
+      rules: { thrill: s.thrill || 'normal', batsu: s.batsu || 'none' },
       players: ent.map((e, i) => ({ name: e.name, color: COLORS[i], pos: 0, skip: false, members: e.ms, mi: 0 })),
       team: !!s.team,
       turn: 0, phase: 'turn', from: 0, q: null, picked: null, ok: null, allOk: [], dice: null,
@@ -1771,7 +1813,7 @@ body[data-screen="result"] .act { min-height: 0; }
     if (atGoal()) { goalLanded(); return; }
     g.phase = 'landed';
     if (c.t === 'stop') g.msg = `${stopped ? 'ストップ！ ' : ''}${c.name}。少し難しい問題に正解すると2マス進める`;
-    else if (c.t === 'genre') g.msg = `「${GENRES[c.g][0]}」の問題。正解ならここに残れる。不正解なら${g.from}マス目に戻る`;
+    else if (c.t === 'genre') g.msg = `「${GENRES[c.g][0]}」の問題。正解ならここに残れる。不正解なら${missText(missTarget())}`;
     else if (c.t === 'challenge') g.msg = 'チャレンジマス。難しい問題に挑んで正解すると、さらに3マス進む';
     else if (c.t === 'all') g.msg = '全員クイズ！ 早い者勝ち。正解した人は2マス進む';
     else if (c.t === 'coop') g.msg = '協力クイズ！ チームで力を合わせて答えよう。成功すれば2マス進む';
@@ -1782,11 +1824,26 @@ body[data-screen="result"] .act { min-height: 0; }
     commit();
   }
 
+  // 不正解のときの行き先（ハラハラ度で変わる）
+  function missTarget() {
+    const g = G(), pos = cur().pos, lv = (g.rules && g.rules.thrill) || 'normal';
+    if (lv === 'calm') return pos >= g.board.len ? g.board.len - 1 : pos;
+    if (lv === 'thrill') return Math.max(0, g.from - 2);
+    return g.from;
+  }
+  const missText = t => (t === cur().pos ? 'その場に残る' : `${t}マス目に戻る`);
+  const missShort = t => (t === cur().pos ? 'その場' : `${t}マス目へ`);
+  async function missWalk(head) {
+    const g = G(), t = missTarget(), label = missText(t);
+    V.move = { label, total: Math.abs(cur().pos - t) }; render();
+    if (t !== cur().pos) { await sleep(RM ? 0 : 250); await walk(g.turn, t - cur().pos); }
+    return `${head} ${label}`;
+  }
   function atGoal() { const g = G(); return g.winner === null && cur().pos >= g.board.len; }
   function goalLanded() {
     const g = G();
     g.phase = 'landed'; g.res = null;
-    g.msg = `ゴール前の最終問題！ 正解すればゴール。不正解なら${g.from}マス目に戻る`;
+    g.msg = `ゴール前の最終問題！ 正解すればゴール。不正解なら${missText(missTarget())}`;
     sound('reveal');
     commit();
   }
@@ -1954,11 +2011,11 @@ body[data-screen="result"] .act { min-height: 0; }
     } else if (kind === 'genre') {
       res = ok ? 'ok' : 'ng';
       if (ok) { mv('', 0); await bounce(g.turn, 16, 360); msg = `正解！ ${cur().pos}マス目に残る`; }
-      else { mv(`${g.from}マス目に戻る`, cur().pos - g.from); await sleep(RM ? 0 : 250); await walk(g.turn, g.from - cur().pos); msg = `不正解… ${g.from}マス目に戻る`; }
+      else msg = await missWalk('不正解…');
     } else if (kind === 'challenge') {
       res = ok ? 'ok' : 'ng';
       if (ok) { mv('チャレンジ成功！ 3マス進む', 3); await sleep(RM ? 0 : 250); await walk(g.turn, 3, { count: true }); msg = 'チャレンジ成功！ 3マス進んだ'; }
-      else { mv(`${g.from}マス目に戻る`, cur().pos - g.from); await sleep(RM ? 0 : 250); await walk(g.turn, g.from - cur().pos); msg = `チャレンジ失敗… ${g.from}マス目に戻る`; }
+      else msg = await missWalk('チャレンジ失敗…');
     } else if (kind === 'stop') {
       res = ok ? 'ok' : 'ng';
       if (ok) { mv('突破！ 2マス進む', 2); await sleep(RM ? 0 : 250); await walk(g.turn, 2, { ignoreStop: true, count: true }); msg = '突破！ 2マス進んだ'; }
@@ -1976,9 +2033,7 @@ body[data-screen="result"] .act { min-height: 0; }
         sound('fanfare'); confetti(44);
         for (let i = 0; i < 3; i++) await bounce(g.turn, 20, 380);
       } else {
-        mv(`${g.from}マス目に戻る`, cur().pos - g.from); await sleep(RM ? 0 : 250);
-        await walk(g.turn, g.from - cur().pos);
-        msg = `最終問題、不正解… ${g.from}マス目に戻る`;
+        msg = await missWalk('最終問題、不正解…');
       }
     }
     V.move = null;
@@ -2045,7 +2100,7 @@ body[data-screen="result"] .act { min-height: 0; }
   function proceed() {
     const g = G();
     if (busy) return;
-    if (g.after === 'end') { state.screen = 'result'; sound('drum'); commit(); setTimeout(() => { sound('fanfare'); confetti(60); }, RM ? 0 : 1500); return; }
+    if (g.after === 'end') { pickBatsu(); state.screen = 'result'; sound('drum'); commit(); setTimeout(() => { sound('fanfare'); confetti(60); }, RM ? 0 : 1500); return; }
     { const pv = cur(); if (pv.members && pv.members.length) pv.mi = (pv.mi || 0) + 1; }
     // 次の人へ（1回休みは飛ばす）
     const n = g.players.length, skipped = [];
@@ -2109,10 +2164,10 @@ body[data-screen="result"] .act { min-height: 0; }
     const kind = g.q.kind;
     const stake = {
       all: '早い者勝ち ・ 正解した人は 2マス進む',
-      challenge: `正解で さらに3マス ・ 不正解は ${g.from}マス目へ`,
+      challenge: `正解で さらに3マス ・ 不正解は ${missShort(missTarget())}`,
       stop: '正解で 2マス進む ・ 不正解は 足止め',
-      goal: `正解で ゴール！ ・ 不正解は ${g.from}マス目へ`,
-      genre: `正解で ここに残る ・ 不正解は ${g.from}マス目へ`,
+      goal: `正解で ゴール！ ・ 不正解は ${missShort(missTarget())}`,
+      genre: `正解で ここに残る ・ 不正解は ${missShort(missTarget())}`,
     }[kind];
     const title = { all: '全員クイズ', challenge: 'チャレンジ', stop: c.name || 'ストップ', goal: '最終問題', genre: '' }[kind];
     const gname = (GENRES[q.genre] || [''])[0], gcol = (GENRES[q.genre] || [])[2] || INK;
@@ -2283,6 +2338,18 @@ body[data-screen="result"] .act { min-height: 0; }
     layoutPieces(true, busy && V.cam.follow >= 0 ? V.cam.follow : -1);
   }
 
+  function pickBatsu() {
+    const g = G(), lv = g.rules && g.rules.batsu;
+    if (!lv || lv === 'none' || !BATSU[lv]) { g.batsu = null; return; }
+    const rest = g.players.map((p, i) => ({ p, i })).filter(x => x.i !== g.winner);
+    const low = Math.min(...rest.map(x => x.p.pos));
+    const losers = rest.filter(x => x.p.pos === low).map(x => x.i);
+    let list = BATSU[lv].slice();
+    if (lv === 'hard' && g.board.cells.some(c => c.t === 'drink')) list.push('ソフトドリンクかお酒を1杯一気（飲める人だけ・無理はしない）');
+    const prevText = g.batsu && g.batsu.text;
+    if (prevText && list.length > 1) list = list.filter(t => t !== prevText);
+    g.batsu = { lv, losers, text: list[rnd(list.length)] };
+  }
   function resultView() {
     const g = G(), len = g.board.len;
     const rk = g.players.map((p, i) => ({ ...p, i })).sort((a, b) => (b.i === g.winner) - (a.i === g.winner) || b.pos - a.pos);
@@ -2299,6 +2366,13 @@ body[data-screen="result"] .act { min-height: 0; }
         ${w.members && w.members.length ? `<p class="win-mem">${esc(w.members.join('・'))}</p>` : ''}
         <p class="win-sub">${g.winner === w.i ? 'お城に一番乗り！ 優勝' : `一番進んだ${g.team ? 'チーム' : '人'}の優勝`}</p>
       </div>
+      ${g.batsu ? `<section class="batsu">
+        <p class="b-kick"><span>罰ゲーム</span><small>${BATSU_LV[g.batsu.lv]}</small></p>
+        <p class="b-who">${g.batsu.losers.map(i => `${miniPawn(g.players[i].color)}<b>${esc(g.players[i].name)}</b>`).join('')}<span>${g.team ? '（チームのみんなで）' : ''}</span></p>
+        <p class="b-txt">${esc(g.batsu.text)}</p>
+        ${GUEST_ROOM ? '' : '<button class="link" data-act="rebatsu">別の罰ゲームにする</button>'}
+      </section>` : ''}
+      <button class="share-btn" data-act="share" data-kind="result"><i>↗</i>結果をシェアする</button>
       <ol class="rank">${rk.map((p, n) => `<li style="--pc:${p.color};--at:${Math.min(1, p.pos / len)};--i:${n}">
         <span class="rk">${n + 1}<small>位</small></span>${miniPawn(p.color, p.name.slice(0, 1))}
         <span class="nm">${esc(p.name)}${p.members && p.members.length ? `<small>${esc(p.members.join('・'))}</small>` : ''}</span><span class="ps">${g.winner === p.i ? 'ゴール' : `${p.pos}マス`}</span>
@@ -2364,11 +2438,17 @@ body[data-screen="result"] .act { min-height: 0; }
           <div class="seg">${[[10, 'お試し'], [15, 'さくっと'], [20, 'ふつう'], [30, 'じっくり']].map(([v, l]) => `<button class="${s.len === v ? 'is-on' : ''}" data-act="len" data-v="${v}">${l}<small>${v}マス</small></button>`).join('')}</div>
           ${h(3, '問題の難しさ')}
           <div class="seg">${[['easy', 'やさしめ'], ['normal', 'ふつう'], ['hard', 'むずかしい']].map(([v, l]) => `<button class="${s.level === v ? 'is-on' : ''}" data-act="level" data-v="${v}">${l}</button>`).join('')}</div>
-          ${h(4, 'お酒マス', 'テキーラ・メガジョッキ')}
+          ${h(4, 'ハラハラ度', 'まちがえたときの厳しさ・波乱')}
+          <div class="seg">${[['calm', 'おだやか', 'ミスしても その場'], ['normal', 'ふつう', 'ミスで 振る前へ'], ['thrill', 'ハラハラ', 'ミスで さらに2戻る']].map(([v, l, sm]) => `<button class="${(s.thrill || 'normal') === v ? 'is-on' : ''}" data-act="thrill" data-v="${v}">${l}<small>${sm}</small></button>`).join('')}</div>
+          <p class="seg-note">${{ calm: '落とし穴などの「戻る」イベントもなし。のんびり楽しむ向け', normal: 'いつもの遊び方', thrill: '落とし穴・下剋上のマスが多めで、逆転が起きやすい' }[s.thrill || 'normal']}</p>
+          ${h(5, '罰ゲーム', '最下位の人が結果発表で')}
+          <div class="seg">${[['none', 'なし'], ['soft', 'ゆるめ'], ['normal', 'ふつう'], ['hard', 'きつめ']].map(([v, l]) => `<button class="${(s.batsu || 'none') === v ? 'is-on' : ''}" data-act="batsu" data-v="${v}">${l}</button>`).join('')}</div>
+          <p class="seg-note">${{ none: '罰ゲームなし', soft: '例：好きな歌のサビを10秒歌う', normal: '例：一発ギャグ・初恋の話', hard: '例：スマホの検索履歴を1つ公開' }[s.batsu || 'none']}</p>
+          ${h(6, 'お酒マス', 'テキーラ・メガジョッキ')}
           <div class="seg">${[[true, 'あり'], [false, 'なし']].map(([v, l]) => `<button class="${s.drinks === v ? 'is-on' : ''}" data-act="drinks" data-v="${v ? 1 : 0}">${l}</button>`).join('')}</div>
-          ${h(5, 'サイコロ', '手元にあるなら実物で振れる')}
+          ${h(7, 'サイコロ', '手元にあるなら実物で振れる')}
           <div class="seg">${[[false, 'アプリで振る'], [true, '手元のサイコロ']].map(([v, l]) => `<button class="${s.realDice === v ? 'is-on' : ''}" data-act="realDice" data-v="${v ? 1 : 0}">${l}</button>`).join('')}</div>
-          ${h(6, '出さないジャンル', 'タップで外す')}
+          ${h(8, '出さないジャンル', 'タップで外す')}
           <div class="chips">${Object.entries(GENRES).map(([g, [l, , col]]) => `<button class="chip${s.ng.includes(g) ? ' is-ng' : ''}" style="--gc:${col}" data-act="ng" data-g="${g}"><i></i>${l}</button>`).join('')}</div>
           <details class="howto"><summary>遊び方</summary>
             <ol>
@@ -2385,7 +2465,7 @@ body[data-screen="result"] .act { min-height: 0; }
       <footer class="act is-home">
         ${resume ? `<button class="big is-white" data-act="resume">続きから遊ぶ</button>` : ''}
         <button class="big is-red" data-act="start">ゲームスタート</button>
-        <button class="link" data-act="room">📱 みんなのスマホでも参加する</button>
+        <div class="home-links"><button class="link" data-act="room">📱 みんなのスマホでも参加する</button><button class="link" data-act="share">↗ このアプリを教える</button></div>
       </footer>`;
   }
 
@@ -2433,6 +2513,9 @@ body[data-screen="result"] .act { min-height: 0; }
     level(d) { state.setup.level = d.v; commit(); },
     drinks(d) { state.setup.drinks = d.v === '1'; commit(); },
     realDice(d) { state.setup.realDice = d.v === '1'; commit(); },
+    thrill(d) { state.setup.thrill = d.v; commit(); },
+    batsu(d) { state.setup.batsu = d.v; commit(); },
+    rebatsu() { if (state.screen !== 'result' || !G()) return; pickBatsu(); sfx('pop'); commit(); },
     pick(d) { roll(Number(d.v)); },
     dice() { if (busy) return; state.setup.realDice = !state.setup.realDice; closeMenu(); commit(); toast(state.setup.realDice ? '手元のサイコロで遊びます' : 'アプリでサイコロを振ります'); },
     ng(d) { const a = state.setup.ng, i = a.indexOf(d.g); if (i >= 0) a.splice(i, 1); else a.push(d.g); commit(); },
@@ -2449,6 +2532,7 @@ body[data-screen="result"] .act { min-height: 0; }
     undo,
     coopStart() { coopStart(); },
     room() { closeMenu(); render(); openRoom(); },
+    share(d) { shareApp(d.kind === 'result'); },
     roomClose() { closeRoomPanel(); },
     roomCopy() { copyInvite(); },
     roomShare() { shareInvite(); },
@@ -2511,7 +2595,7 @@ body[data-screen="result"] .act { min-height: 0; }
   const PEER_JS = 'https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js';
   const QR_JS = 'https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js';
   const PEER_HOST = QS.get('peerhost'); // 動作確認用（自前の仲介サーバー）
-  const GUEST_LOCAL = new Set(['menu', 'sound', 'leave', 'retry']);
+  const GUEST_LOCAL = new Set(['menu', 'sound', 'leave', 'retry', 'share']);
   const GUEST_OK = new Set(['roll', 'pick', 'resolve', 'drink', 'show', 'judge', 'choose', 'allOk', 'afterReveal', 'next', 'coopStart', 'coopJudge']);
   const NET = { peer: null, conns: [], conn: null, status: '', got: false, pending: null, applying: false, panel: false, timer: 0 };
   const PID = r => `sugoroku-quiz-${r}`;
@@ -2529,6 +2613,22 @@ body[data-screen="result"] .act { min-height: 0; }
     if (GUEST_ROOM) return `<span class="net is-guest${NET.status === 'ok' ? '' : ' is-off'}">📱 参加中</span>`;
     if (!NET.peer) return '';
     return `<button class="net${NET.conns.length ? '' : ' is-off'}" data-act="room">📱 ${NET.conns.length}</button>`;
+  }
+
+  // --- シェア（LINE・X などへ。使えない端末では URL をコピー） ---
+  async function shareApp(withResult) {
+    let text = 'スマホで遊べるすごろく×クイズ。二次会や飲み会で盛り上がるよ！';
+    const g = state.game;
+    if (withResult && g) {
+      const w = g.winner !== null ? g.players[g.winner] : g.players.slice().sort((a, b) => b.pos - a.pos)[0];
+      text = `すごろくクイズで「${w.name}」が優勝しました🏆（ぜんぶで${g.asked}問）\n二次会や飲み会で盛り上がるスマホのすごろく×クイズ`;
+    }
+    if (navigator.share) {
+      try { await navigator.share({ title: 'すごろくクイズ', text, url: SITE }); } catch (e) { /* 閉じられた */ }
+      return;
+    }
+    try { await navigator.clipboard.writeText(`${text}\n${SITE}`); toast('紹介文とURLをコピーしました'); }
+    catch (e) { window.prompt('このURLをコピーして送ってください', SITE); }
   }
 
   // --- 幹事（親） ---
