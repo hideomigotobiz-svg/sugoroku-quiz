@@ -553,6 +553,41 @@ body[data-screen="result"] .act { min-height: 0; }
 .b-who span { font-size: 12px; color: var(--sub); font-weight: 700; }
 .b-txt { margin: 6px 0 4px; font-size: 22px; font-weight: 900; line-height: 1.4; }
 
+/* 早押し */
+.bz-text { min-height: 4.4em; }
+.bz-rest { color: transparent; }
+.bz-tier { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 6px; margin: 0 0 12px; font-size: 13px; font-weight: 700; color: var(--sub); }
+.bz-tier b { font-size: 16px; font-weight: 900; color: #1B7A4C; }
+.bz-tier b.m { color: var(--onair); }
+.bz-tier i { font-style: normal; color: #C9C9C2; }
+.bz-who { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; margin: 0 0 12px; padding: 8px 12px; border: 3px solid var(--ink); border-radius: 10px; background: var(--marker); box-shadow: 0 4px 0 var(--ink); animation: bzIn .25s var(--pop, ease-out) both; }
+.bz-who b { font-size: 22px; font-weight: 900; }
+.bz-who span { font-size: 13px; font-weight: 700; margin-left: auto; }
+.bz-who.is-pick { background: var(--onair); color: var(--white); }
+@keyframes bzIn { from { transform: scale(.85); opacity: 0; } }
+.bz-out { margin: 12px 0 0; font-size: 13px; font-weight: 700; color: var(--onair); }
+.bz-btn { min-height: 92px; font-size: 30px; letter-spacing: .08em; border-radius: 999px; }
+.bz-btn i { font-style: normal; margin-right: 10px; }
+.bz-btn.is-sent { font-size: 20px; }
+.bz-peek { margin: 0 0 8px; padding: 8px 12px; border: 2px dashed var(--ink); border-radius: 8px; text-align: center; font-size: 15px; }
+.bz-peek b { font-size: 20px; }
+.bz-res { display: flex; flex-wrap: wrap; gap: 6px 12px; margin: 10px 0 0; font-size: 15px; font-weight: 700; }
+.bz-res span { border-left: 6px solid var(--pc); padding-left: 6px; }
+.bz-res b { font-size: 18px; }
+.me-list { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin: 6px 0; }
+#mepick { position: fixed; inset: 0; z-index: 72; display: grid; place-items: end center; }
+
+/* 参加者が自分で名前を入れる */
+.join { margin: 14px 0 6px; padding: 14px; border: 2.5px solid var(--ink); border-radius: 12px; background: var(--white); box-shadow: 0 4px 0 var(--ink); display: grid; gap: 10px; }
+.join label { display: grid; gap: 6px; font-size: 13px; font-weight: 900; color: var(--sub); }
+.join input { border: 2px solid var(--ink); border-radius: 8px; padding: 12px; font-size: 20px; font-weight: 700; }
+.join input:focus { outline: none; background: #FFF6BF; }
+.join-h { margin: 0; font-size: 13px; font-weight: 900; color: var(--sub); }
+.join .pchip.is-on { outline: 3px solid var(--ink); }
+.join.is-done { background: #F2FBF5; text-align: center; }
+.join.is-done p { margin: 0; font-size: 16px; }
+.join.is-done b { font-size: 20px; }
+
 </style>
 </head>
 <body>
@@ -902,7 +937,14 @@ body[data-screen="result"] .act { min-height: 0; }
       pop(t) { knock(t, 880, 0.14, 0.05); knock(t + 0.07, 1320, 0.14, 0.09); },
       gate(t) { knock(t, 150, 0.4, 0.16); knock(t + 0.14, 120, 0.36, 0.2); },
       tap(t) { click(t, 1500, 0.05); },
+      buzzer(t) { beep(t, 1568, 0.16, 0.12); beep(t + 0.17, 1245, 0.34, 0.12); },
     };
+    function beep(t, f, dur, gain) {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = 'square'; o.frequency.setValueAtTime(f, t);
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(gain, t + 0.01); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+      o.connect(g).connect(ctx.destination); o.start(t); o.stop(t + dur + 0.02);
+    }
     function play(name) {
       if (!ctx || ctx.state !== 'running' || !SE[name]) return;
       try { SE[name](ctx.currentTime + 0.005); } catch (e) { /* 鳴らせなくても進行は止めない */ }
@@ -1871,6 +1913,7 @@ body[data-screen="result"] .act { min-height: 0; }
     g.usedQ.push(q.id); g.asked++;
     state.seen = (state.seen || []).filter(id => id !== q.id).concat(q.id).slice(-400);
     g.q = { id: q.id, mode: modeOf(q), hard: !!hard, all: !!all, kind: kind || (all ? 'all' : 'genre') };
+    if (all) g.q.bz = { t0: Date.now() + 1300 / SPEED, ms: Math.round(130 / SPEED), len: Array.from(q.question).length, state: 'reveal', shown: 0, who: null, out: [], moves: {}, tier: null };
     g.picked = null; g.ok = null; g.allOk = [];
     g.phase = 'question';
     sound('question');
@@ -1966,6 +2009,125 @@ body[data-screen="result"] .act { min-height: 0; }
     </section>`;
   }
 
+  // ---------- 早押し（全員クイズ） ----------
+  // 押したときに問題文がどこまで出ていたかで、正解で進む数・お手つきで戻る数が変わる
+  const BZ_TIERS = [[0.4, 3, -2], [0.75, 2, -1], [9, 1, 0]];
+  function bzTier(shown, len) {
+    const r = len ? shown / len : 1;
+    for (const [lim, plus, minus] of BZ_TIERS) if (r <= lim) return { plus, minus };
+    return { plus: 1, minus: 0 };
+  }
+  const tierHTML = t => `今押すと <b>正解 +${t.plus}</b><i>／</i><b class="m">お手つき ${t.minus ? t.minus : '±0'}</b>`;
+  const hostNow = () => Date.now() + (GUEST_ROOM ? (NET.skew || 0) : 0);
+  function bzShown(bz) { return bz.state === 'reveal' ? clamp(Math.floor((hostNow() - bz.t0) / bz.ms), 0, bz.len) : bz.shown; }
+  const netMode = () => !!GUEST_ROOM || NET.conns.length > 0;
+  // 親: 早押しを受け付ける。少しだけ待って、押した時刻が一番早い人にする（通信の遅れで不利にならないように）
+  function hostBuzz(who, at) {
+    const g = G(), bz = g && g.phase === 'question' && g.q && g.q.bz;
+    if (!bz || bz.state !== 'reveal' || !(who >= 0 && who < g.players.length) || bz.out.includes(who)) return;
+    if (!NET.bzCand || NET.bzCand.q !== g.q.id) NET.bzCand = { q: g.q.id, list: [], timer: 0 };
+    NET.bzCand.list.push({ who, at: Math.min(at, Date.now()) });
+    if (NET.bzCand.timer) return;
+    NET.bzCand.timer = setTimeout(() => {
+      const c = NET.bzCand; NET.bzCand = null;
+      const g2 = G(), b = g2 && g2.q && g2.q.bz;
+      if (!c || !b || b.state !== 'reveal' || g2.q.id !== c.q) return;
+      const win = c.list.sort((x, y) => x.at - y.at)[0];
+      b.shown = clamp(Math.floor((win.at - b.t0) / b.ms), 0, b.len);
+      bzSet(win.who);
+    }, 160);
+  }
+  function bzSet(who) {
+    const g = G(), b = g.q.bz;
+    b.who = who; b.tier = bzTier(b.shown, b.len); b.state = 'buzzed';
+    V.peek = false;
+    sfx('buzzer'); buzz(40);
+    telop(`<small>PINPON</small><b>${esc(g.players[who].name)}</b>`, 'is-turn', 1100);
+    commit();
+  }
+  function bzStop() { // スマホ1台: 手が挙がったら止めて、答える人を選ぶ
+    const g = G(), b = g.q && g.q.bz;
+    if (!b || b.state !== 'reveal' || g.phase !== 'question') return;
+    b.shown = bzShown(b); b.state = 'pick'; sfx('set'); commit();
+  }
+  function bzResume() {
+    const g = G(), b = g.q && g.q.bz;
+    if (!b || (b.state !== 'pick' && b.state !== 'buzzed')) return;
+    b.state = 'reveal'; b.who = null; b.t0 = Date.now() - b.shown * b.ms; commit();
+  }
+  function bzJudge(ok) {
+    const g = G(), b = g.q && g.q.bz;
+    if (!b || b.state !== 'buzzed' || g.phase !== 'question') return;
+    const who = b.who;
+    if (ok) {
+      b.moves[who] = (b.moves[who] || 0) + b.tier.plus;
+      bzFinish(true);
+      return;
+    }
+    if (b.tier.minus) b.moves[who] = (b.moves[who] || 0) + b.tier.minus;
+    b.out.push(who);
+    sound('wrong'); buzz([60, 40, 60]);
+    if (b.out.length >= g.players.length) { bzFinish(false); return; }
+    b.state = 'reveal'; b.who = null; b.t0 = Date.now() - b.shown * b.ms;
+    toast(`${g.players[who].name} はお手つき`);
+    commit();
+  }
+  function bzFinish(ok) {
+    const g = G(), b = g.q.bz;
+    if (!ok) b.shown = Math.max(b.shown, bzShown(b));
+    b.state = 'done';
+    g.allOk = ok ? [b.who] : [];
+    g.phase = 'reveal';
+    if (ok) { sound('correct'); buzz(30); } else sound('reveal');
+    commit();
+    if (ok) { stamp(true); confetti(22); }
+  }
+  function bzTick() {
+    const g = G(), b = g && g.phase === 'question' && g.q && g.q.bz;
+    if (!b || b.state !== 'reveal') { if (V.bzIv) { clearInterval(V.bzIv); V.bzIv = 0; } return; }
+    if (V.bzIv) return;
+    const q = QMAP.get(g.q.id), chars = Array.from(q.question);
+    let last = -1;
+    V.bzIv = setInterval(() => {
+      const g2 = G(), b2 = g2 && g2.phase === 'question' && g2.q && g2.q.bz;
+      if (!b2 || b2.state !== 'reveal' || g2.q.id !== q.id) { clearInterval(V.bzIv); V.bzIv = 0; return; }
+      const n = bzShown(b2);
+      if (n === last) return;
+      const full = n >= chars.length && last < chars.length && last >= 0;
+      last = n;
+      const a = document.getElementById('bz-shown'), r = document.getElementById('bz-rest'), t = document.getElementById('bz-tier');
+      if (a) a.textContent = chars.slice(0, n).join('');
+      if (r) r.textContent = chars.slice(n).join('');
+      if (t) t.innerHTML = tierHTML(bzTier(n, chars.length));
+      if (n > 0 && n < chars.length && n % 3 === 0) sfx('tap');
+      if (full) render();
+    }, 40);
+  }
+  // このスマホで遊ぶ人（みんなのスマホで参加のとき）
+  const ME_KEY = () => `sgq-me-${GUEST_ROOM || state.room || ''}`;
+  NET_ME_LOAD: {
+    try { const v = sessionStorage.getItem(`sgq-me-${GUEST_ROOM || state.room || ''}`); if (v !== null) V.me = Number(v); } catch (e) { /* 使えない環境 */ }
+    try { if (GUEST_ROOM) { const n = localStorage.getItem('sgq-myname'); if (n) V.typed = n; V.myName = sessionStorage.getItem(`sgq-joined-${GUEST_ROOM}`) || ''; } } catch (e) { /* 使えない環境 */ }
+  }
+  // 参加側: 自分の名前から「このスマホはどの駒か」を決める（チーム戦ならメンバーに入っているチーム）
+  function autoMe() {
+    const g = state.game;
+    if (!GUEST_ROOM || !g || !V.myName || (V.me !== undefined && V.me < g.players.length && V.meGame === g.board.seed)) return;
+    const i = g.players.findIndex(p => p.name === V.myName || (p.members || []).includes(V.myName));
+    if (i >= 0) { V.meGame = g.board.seed; setMe(i); }
+  }
+  function setMe(i) { V.me = i; if (state.game) V.meGame = state.game.board.seed; try { sessionStorage.setItem(ME_KEY(), String(i)); } catch (e) { /* 使えない環境 */ } render(); }
+  function renderMePick() {
+    let el = document.getElementById('mepick');
+    const g = state.game;
+    const need = state.screen === 'game' && g && netMode() && (V.me === undefined || V.me >= (g.players || []).length) && (!GUEST_ROOM || NET.got);
+    if (!need) { if (el) el.remove(); return; }
+    if (!el) { el = document.createElement('div'); el.id = 'mepick'; document.body.appendChild(el); }
+    el.innerHTML = `<div class="room-back"></div><section class="room-card"><h2>このスマホで遊ぶのは？</h2>
+      <p class="room-lead">早押しのときに、だれが押したかが分かるようにします</p>
+      <div class="me-list">${g.players.map((pl, i) => `<button class="pchip" style="--pc:${pl.color}" data-act="me" data-i="${i}">${miniPawn(pl.color, pl.name.slice(0, 1))}${esc(pl.name)}</button>`).join('')}</div>
+      <button class="link" data-act="me" data-i="-1">見るだけ（早押しはしない）</button></section>`;
+  }
   function judge(ok) {
     const g = G();
     g.ok = ok; g.phase = 'reveal';
@@ -1998,12 +2160,18 @@ body[data-screen="result"] .act { min-height: 0; }
     const g = G();
     if (busy || g.phase !== 'reveal') return;
     busy = true;
-    const kind = g.q.kind, ok = g.ok, allOk = g.allOk.slice();
+    const kind = g.q.kind, ok = g.ok, allOk = g.allOk.slice(), bzMoves = g.q.bz ? g.q.bz.moves : null;
     await closeSheet();
     g.q = null; g.phase = 'moving';
     let msg = '', res = null;
     const mv = (label, total) => { V.move = { label, total }; render(); };
-    if (kind === 'all') {
+    if (kind === 'all' && bzMoves) {
+      const list = Object.entries(bzMoves).map(([i, d]) => [Number(i), d]).filter(([, d]) => d).sort((a, b) => b[1] - a[1]);
+      mv(list.length ? '早押しの結果' : '', 0);
+      for (const [i, d] of list) { camTo(g.players[i].pos); await sleep(RM ? 0 : 350); await walk(i, d, { ignoreStop: true, count: d > 0 }); }
+      msg = list.length ? list.map(([i, d]) => `${g.players[i].name} ${d > 0 ? '+' + d : d}`).join('、') : '正解者なし';
+      res = 'event';
+    } else if (kind === 'all') {
       mv(allOk.length ? '正解者が2マス進む' : '', 0);
       for (const i of allOk) { camTo(g.players[i].pos); await sleep(RM ? 0 : 350); await walk(i, 2, { ignoreStop: true }); }
       msg = allOk.length ? `${allOk.map(i => g.players[i].name).join('・')} が2マス進んだ` : '正解者なし';
@@ -2173,6 +2341,34 @@ body[data-screen="result"] .act { min-height: 0; }
     const gname = (GENRES[q.genre] || [''])[0], gcol = (GENRES[q.genre] || [])[2] || INK;
     const image = q.image_svg ? `<div class="q-img">${q.image_svg}</div>` : q.image_emoji ? `<div class="q-img is-emoji">${esc(q.image_emoji)}</div>` : '';
     let body = '';
+    const bz = g.q.bz;
+    if (bz && !reveal && bz.state !== 'done') {
+      const n = bzShown(bz), chars = Array.from(q.question), full = n >= chars.length;
+      const who = bz.who !== null ? g.players[bz.who] : null;
+      const outs = bz.out.map(i => g.players[i]);
+      const head = bz.state === 'buzzed' && who
+        ? `<div class="bz-who" style="--pc:${who.color}">${miniPawn(who.color, who.name.slice(0, 1))}<b>${esc(who.name)}</b><span>正解 +${bz.tier.plus} ／ お手つき ${bz.tier.minus || '±0'}</span></div>`
+        : bz.state === 'pick' ? `<div class="bz-who is-pick"><b>ストップ！</b><span>答える人を選んでね</span></div>`
+        : `<div class="bz-tier" id="bz-tier">${tierHTML(bzTier(n, chars.length))}</div>`;
+      const choices = g.q.mode === 'choice4' && bz.state === 'buzzed'
+        ? `<div class="choices">${q.choices.map((ch, i) => `<button class="choice" data-act="bzChoose" data-i="${i}"><b>${'ABCD'[i]}</b><span>${esc(ch)}</span></button>`).join('')}</div>` : '';
+      return `<div class="sheet-back"></div><section class="qcard is-all is-bz">
+      <div class="q-head">
+        <span class="q-no"><small>Q</small>${g.asked}</span>
+        <div class="q-who"><b>早押しクイズ</b></div>
+        <span class="q-genre" style="--gc:${gcol}">${esc(gname)}</span>
+      </div>
+      <p class="q-stake">早く押すほど 正解で大きく進む ・ お手つきは戻る</p>
+      <div class="q-body">
+        ${head}
+        ${image}
+        <div class="q-text bz-text"><span id="bz-shown">${esc(chars.slice(0, n).join(''))}</span><span id="bz-rest" class="bz-rest">${esc(chars.slice(n).join(''))}</span></div>
+        ${q.display && (full || bz.state !== 'reveal') ? `<div class="q-text is-display">${nl(q.display)}</div>` : ''}
+        ${choices}
+        ${outs.length ? `<p class="bz-out">お手つき：${outs.map(pl => esc(pl.name)).join('・')}</p>` : ''}
+      </div>
+    </section>`;
+    }
     if (g.q.mode === 'choice4') {
       body = `<div class="choices">${q.choices.map((ch, i) => {
         const cls = reveal ? (ch === q.answer ? ' is-answer' : i === g.picked ? ' is-wrong' : ' is-dim') : '';
@@ -2182,9 +2378,11 @@ body[data-screen="result"] .act { min-height: 0; }
       body = `<div class="five">${Array.from(q.five).map((ch, i) => `<span style="--i:${i}">${reveal ? esc(ch) : ''}</span>`).join('')}</div>`;
     }
     const verdict = g.q.all || g.ok === null ? '' : g.ok ? ' is-ok' : ' is-ng';
+    const bzRes = bz && reveal ? Object.entries(bz.moves).filter(([, d]) => d).map(([i, d]) => `<span style="--pc:${g.players[i].color}">${esc(g.players[i].name)} <b>${d > 0 ? '+' + d : d}</b></span>`).join('') : '';
     const answer = reveal ? `<div class="answer${verdict}" id="answer">
         <div class="ans-head">${g.q.all || g.ok === null ? '正解は' : g.ok ? '正解！' : '残念… 正解は'}</div>
         <div class="ans"><span>${esc(q.answer)}</span></div>
+        ${bz && reveal ? `<p class="bz-res">${bzRes || '正解者なし'}</p>` : ''}
         ${q.accept_rule && g.q.mode !== 'choice4' ? `<p class="rule">${esc(q.accept_rule)}</p>` : ''}
         ${q.explanation ? `<p class="expl">${esc(q.explanation)}</p>` : ''}
       </div>` : '';
@@ -2204,6 +2402,28 @@ body[data-screen="result"] .act { min-height: 0; }
     </section>`;
   }
 
+  function bzActHTML(g, big) {
+    const b = g.q.bz, q = QMAP.get(g.q.id), full = bzShown(b) >= b.len;
+    const give = full ? `<button class="link" data-act="bzGiveup">だれも分からない → 答えを見る</button>` : '';
+    if (b.state === 'reveal') {
+      if (!netMode()) return `${big('bzStop', '<i>✋</i>ストップ！（手が挙がったら）', 'is-red bz-btn')}${give}`;
+      if (V.me === undefined || V.me < 0 || V.me >= g.players.length) return `<p class="hint">問題文が出てきます。分かったら手元のスマホで早押し！</p>${V.me === -1 ? '' : big('meReset', 'このスマホで遊ぶ人を選ぶ', 'is-white')}${give}`;
+      if (b.out.includes(V.me)) return `<p class="hint">お手つき中。ほかの人の答えを待ってね</p>${give}`;
+      const sent = V.bzSent === `${g.q.id}:${b.out.length}`;
+      return `<button class="big is-red bz-btn${sent ? ' is-sent' : ''}" data-act="buzz" ${sent ? 'disabled' : ''}><i>●</i>${sent ? '押しました…' : '早押し！'}</button>${give}`;
+    }
+    if (b.state === 'pick') {
+      return `<p class="hint">手を挙げたのはだれ？</p>
+        <div class="pick">${g.players.map((pl, i) => b.out.includes(i) ? '' : `<button class="pchip" style="--pc:${pl.color}" data-act="bzWho" data-i="${i}">${miniPawn(pl.color)}${esc(pl.name)}</button>`).join('')}</div>
+        <button class="link" data-act="bzResume">まちがえて止めた → 続ける</button>`;
+    }
+    const who = g.players[b.who];
+    if (g.q.mode === 'choice4') return `<p class="hint"><b>${esc(who.name)}</b> が答えをタップ</p>`;
+    const peek = V.peek ? `<div class="bz-peek">答え：<b>${esc(q.answer)}</b></div>` : '';
+    return `<p class="hint"><b>${esc(who.name)}</b> が声に出して答えて！</p>${peek}
+      <div class="judge">${big('bzJudge', '<i>×</i>お手つき', 'is-white', 'data-v="0"')}${big('bzJudge', '<i>○</i>正解！', 'is-red', 'data-v="1"')}</div>
+      <button class="link" data-act="peek">${V.peek ? '答えをかくす' : '答えをこっそり見る（判定する人だけ）'}</button>`;
+  }
   function actionHTML() {
     const g = G(), p = cur(), c = cellAt(p.pos);
     const big = (act, label, cls = '', extra = '') => `<button class="big ${cls}" data-act="${act}" ${extra}>${label}</button>`;
@@ -2252,9 +2472,14 @@ body[data-screen="result"] .act { min-height: 0; }
           if (!V.coop && !g.q.runAt) return `<p class="hint">準備ができたらスタート</p>${big('coopStart', `スタート（${g.q.sec}秒）`, 'is-red')}`;
           return `<p class="hint">${COOPMAP.get(g.q.coop).need}個 言えた？</p><div class="judge">${big('coopJudge', '<i>×</i>ギブアップ', 'is-white', 'data-v="0"')}${big('coopJudge', '<i>○</i>言えた！', 'is-red', 'data-v="1"')}</div>`;
         }
+        if (g.q.bz) return bzActHTML(g, big);
         if (g.q.mode === 'choice4') return `<p class="hint">${g.q.all ? 'わかった人が答えをタップ' : `${esc(answerer(p) || p.name)} が答えをタップ`}</p>`;
         return `<p class="hint">${g.q.all ? 'わかった人は手を挙げて答えて！' : '声に出して答えてから'}</p>${big('show', '答えを見る')}`;
       case 'reveal':
+        if (g.q.bz) {
+          const mv = Object.entries(g.q.bz.moves).filter(([, d]) => d);
+          return big('afterReveal', mv.length ? '結果のとおり進む・戻る' : '次へ', mv.length ? 'is-red' : '');
+        }
         if (g.q.all) {
           return `<p class="hint">${g.team ? '正解したチームをタップ（いくつでも）' : '正解した人をタップ（何人でも）'}</p>
             <div class="pick">${g.players.map((pl, i) => `<button class="pchip${g.allOk.includes(i) ? ' is-on' : ''}" style="--pc:${pl.color}" data-act="allOk" data-i="${i}">${miniPawn(pl.color)}${esc(pl.name)}</button>`).join('')}</div>
@@ -2277,11 +2502,13 @@ body[data-screen="result"] .act { min-height: 0; }
   const barHTML = g => `<span class="title">すごろくクイズ</span>${netBadge()}<span class="count">${g.asked ? `<b>Q${g.asked}</b>` : ''}ゴールは ${g.board.len}マス目</span>
     <button class="icon" data-act="menu" aria-label="メニュー"><i></i><i></i><i></i></button>`;
   const menuHTML = g => (!menuOpen ? '' : GUEST_ROOM ? `<div class="menu-back" data-act="menu"></div><div class="menu" role="menu">
+      <button data-act="meReset">このスマホで遊ぶ人を変える</button>
       <button data-act="sound">${state.setup.sound ? '音を消す' : '音を出す'}</button>
       <button data-act="leave">この部屋から抜ける</button>
       <button data-act="menu">閉じる</button>
     </div>` : `<div class="menu-back" data-act="menu"></div><div class="menu" role="menu">
       <button data-act="room">📱 みんなのスマホで参加</button>
+      ${NET.conns.length ? '<button data-act="meReset">このスマホで遊ぶ人を変える</button>' : ''}
       <button data-act="undo" ${(g.hist || []).length ? '' : 'disabled'}>1手戻す</button>
       <button data-act="dice">${state.setup.realDice ? 'アプリのサイコロを使う' : '手元のサイコロを使う'}</button>
       <button data-act="sound">${state.setup.sound ? '音を消す' : '音を出す'}</button>
@@ -2473,14 +2700,17 @@ body[data-screen="result"] .act { min-height: 0; }
   function render() {
     if (GUEST_ROOM && (!state.game || state.screen === 'home' || !NET.got)) {
       lastScreen = 'wait'; document.body.dataset.screen = 'home'; V.built = null;
+      const f = document.activeElement && document.activeElement.id === 'join-name';
       app.innerHTML = guestWaitView();
+      if (f) { const el = document.getElementById('join-name'); if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); } }
       return;
     }
     const scr = state.screen === 'game' && state.game ? 'game' : state.screen === 'result' && state.game ? 'result' : 'home';
     const changed = scr !== lastScreen;
     lastScreen = scr;
     document.body.dataset.screen = scr;
-    if (scr === 'game') { renderGame(); return; }
+    if (scr === 'game') { autoMe(); renderGame(); bzTick(); renderMePick(); return; }
+    renderMePick();
     V.built = null;
     const main = app.querySelector('main'), top = main && !changed ? main.scrollTop : 0;
     app.classList.toggle('is-fresh', changed);
@@ -2531,12 +2761,41 @@ body[data-screen="result"] .act { min-height: 0; }
     menu() { menuOpen = !menuOpen; render(); },
     undo,
     coopStart() { coopStart(); },
+    buzz() {
+      const g = G(), b = g && g.q && g.q.bz;
+      if (!b || b.state !== 'reveal' || !(V.me >= 0)) return;
+      V.bzSent = `${g.q.id}:${b.out.length}`;
+      sfx('tap'); buzz(15);
+      if (GUEST_ROOM) { if (NET.conn && NET.conn.open) NET.conn.send({ t: 'b', who: V.me, at: hostNow() }); render(); }
+      else hostBuzz(V.me, Date.now());
+    },
+    bzStop() { bzStop(); },
+    bzWho(d) { const g = G(), b = g.q && g.q.bz; if (b && b.state === 'pick') bzSet(Number(d.i)); },
+    bzResume() { bzResume(); },
+    bzJudge(d) { bzJudge(d.v === '1'); },
+    bzChoose(d) { const g = G(), b = g.q && g.q.bz; if (!b || b.state !== 'buzzed') return; const q = QMAP.get(g.q.id); bzJudge(q.choices[Number(d.i)] === q.answer); },
+    bzGiveup() { const g = G(), b = g.q && g.q.bz; if (b && g.phase === 'question' && b.state !== 'done') bzFinish(false); },
+    peek() { V.peek = !V.peek; render(); },
+    me(d) { setMe(Number(d.i)); },
+    meReset() { closeMenu(); V.me = undefined; render(); },
     room() { closeMenu(); render(); openRoom(); },
     share(d) { shareApp(d.kind === 'result'); },
     roomClose() { closeRoomPanel(); },
     roomCopy() { copyInvite(); },
     roomShare() { shareInvite(); },
     leave() { location.href = location.pathname; },
+    join() {
+      const el = document.getElementById('join-name'), name = (el ? el.value : V.typed || '').trim().slice(0, 10);
+      if (!name) { toast('名前を入れてください'); return; }
+      if (state.setup.team && V.myTeam === undefined) { toast('入るチームを選んでください'); return; }
+      if (!NET.conn || !NET.conn.open) { toast('幹事のスマホとつながっていません'); return; }
+      NET.conn.send({ t: 'j', name, team: V.myTeam, old: V.myName || V.prevName || '' });
+      V.myName = name; V.typed = name; V.me = undefined;
+      try { localStorage.setItem('sgq-myname', name); sessionStorage.setItem(`sgq-joined-${GUEST_ROOM}`, name); } catch (e) { /* 使えない環境 */ }
+      sfx('pop'); render();
+    },
+    joinTeam(d) { const el = document.getElementById('join-name'); if (el) V.typed = el.value; V.myTeam = Number(d.i); render(); },
+    joinEdit() { V.prevName = V.myName; V.myName = ''; render(); },
     retry() { joinRoom(); },
     coopJudge(d) { coopJudge(d.v === '1'); },
     sound() { state.setup.sound = !state.setup.sound; closeMenu(); commit(); toast(state.setup.sound ? '音を出します' : '音を消しました'); },
@@ -2558,6 +2817,7 @@ body[data-screen="result"] .act { min-height: 0; }
     if (fn) fn(b.dataset, b);
   });
   document.addEventListener('input', e => {
+    if (e.target.id === 'join-name') { V.typed = e.target.value; return; }
     const mi = e.target.dataset.member;
     if (mi !== undefined) { (state.setup.members = state.setup.members || [])[Number(mi)] = e.target.value; save(); return; }
     const i = e.target.dataset.player;
@@ -2567,6 +2827,7 @@ body[data-screen="result"] .act { min-height: 0; }
     if (t) t.textContent = (e.target.value.trim() || (state.setup.team ? TEAM_ABC[Number(i)] : String(Number(i) + 1))).slice(0, 1);
   });
   document.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && e.target.id === 'join-name') { e.preventDefault(); actions.join(); return; }
     if (e.key !== 'Enter' || e.target.dataset.player === undefined) return;
     e.preventDefault();
     const nx = document.getElementById(`pl-${Number(e.target.dataset.player) + 1}`);
@@ -2595,8 +2856,8 @@ body[data-screen="result"] .act { min-height: 0; }
   const PEER_JS = 'https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js';
   const QR_JS = 'https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js';
   const PEER_HOST = QS.get('peerhost'); // 動作確認用（自前の仲介サーバー）
-  const GUEST_LOCAL = new Set(['menu', 'sound', 'leave', 'retry', 'share']);
-  const GUEST_OK = new Set(['roll', 'pick', 'resolve', 'drink', 'show', 'judge', 'choose', 'allOk', 'afterReveal', 'next', 'coopStart', 'coopJudge']);
+  const GUEST_LOCAL = new Set(['menu', 'sound', 'leave', 'retry', 'share', 'buzz', 'peek', 'me', 'meReset', 'join', 'joinTeam', 'joinEdit']);
+  const GUEST_OK = new Set(['roll', 'pick', 'resolve', 'drink', 'show', 'judge', 'choose', 'allOk', 'afterReveal', 'next', 'coopStart', 'coopJudge', 'bzJudge', 'bzChoose', 'bzGiveup', 'bzStop', 'bzWho', 'bzResume']);
   const NET = { peer: null, conns: [], conn: null, status: '', got: false, pending: null, applying: false, panel: false, timer: 0 };
   const PID = r => `sugoroku-quiz-${r}`;
   const peerOpts = () => (PEER_HOST ? { host: PEER_HOST.split(':')[0], port: Number(PEER_HOST.split(':')[1] || 9000), path: '/', secure: false } : {});
@@ -2645,7 +2906,7 @@ body[data-screen="result"] .act { min-height: 0; }
       peer.on('open', () => { NET.status = 'open'; renderRoom(); render(); });
       peer.on('connection', c => {
         c.on('open', () => { NET.conns.push(c); sendState(c); renderRoom(); render(); toast('スマホが1台つながりました'); });
-        c.on('data', d => onGuestMsg(d));
+        c.on('data', d => onGuestMsg(d, c));
         const gone = () => { if (!NET.conns.includes(c)) return; NET.conns = NET.conns.filter(x => x !== c); renderRoom(); render(); };
         c.on('close', gone); c.on('error', gone);
       });
@@ -2669,7 +2930,36 @@ body[data-screen="result"] .act { min-height: 0; }
     if (GUEST_ROOM || !NET.conns.length || NET.timer) return;
     NET.timer = setTimeout(() => { NET.timer = 0; const msg = { t: 's', s: snapshot4net() }; NET.conns.forEach(c => { try { c.send(msg); } catch (e) { /* 送れなかった */ } }); }, 0);
   }
-  function onGuestMsg(d) {
+  function hostJoin(d) {
+    const name = String(d.name || '').trim().slice(0, 10);
+    if (!name) return;
+    const st = state.setup;
+    if (state.screen === 'game' && state.game) { toast(`${name} が見ています`); return; }
+    if (st.team) {
+      st.members = st.members || [];
+      const ti = clamp(Number(d.team) || 0, 0, st.players.length - 1);
+      st.members.forEach((m, i) => { if (i !== ti && m) st.members[i] = splitMembers(m).filter(x => x !== name).join(' '); });
+      const cur = splitMembers(st.members[ti]);
+      if (!cur.includes(name)) cur.push(name);
+      st.members[ti] = cur.join(' ');
+    } else if (!st.players.some(n => n.trim() === name)) {
+      const old = String(d.old || '').trim();
+      let i = old ? st.players.findIndex(n => n.trim() === old) : -1;
+      if (i < 0) i = st.players.findIndex(n => !n.trim());
+      if (i < 0 && st.players.length < 6) { st.players.push(''); i = st.players.length - 1; }
+      if (i < 0) { toast('6人までです'); return; }
+      st.players[i] = name;
+    }
+    toast(`${name} が参加しました`);
+    // 入力中の欄はそのまま残す
+    const ae = document.activeElement, keep = ae && ae.id ? { id: ae.id, v: ae.value, s: ae.selectionStart } : null;
+    commit();
+    if (keep) { const el = document.getElementById(keep.id); if (el && el !== document.activeElement) { el.focus(); try { el.setSelectionRange(keep.s, keep.s); } catch (e) { /* 選択できない欄 */ } } }
+  }
+  function onGuestMsg(d, c) {
+    if (d && d.t === 'p') { try { c.send({ t: 'P', c: d.c, h: Date.now() }); } catch (e) { /* 送れなかった */ } return; }
+    if (d && d.t === 'b') { if (state.screen === 'game') hostBuzz(Number(d.who), Number(d.at) || Date.now()); return; }
+    if (d && d.t === 'j') { hostJoin(d); return; }
     if (!d || d.t !== 'a' || !GUEST_OK.has(d.act) || !state.game || state.screen !== 'game') return;
     try { actions[d.act](d.d || {}); } catch (e) { /* 無効な操作 */ }
   }
@@ -2725,8 +3015,11 @@ body[data-screen="result"] .act { min-height: 0; }
       NET.conn = c;
       let opened = false;
       const to = setTimeout(() => { if (!opened && NET.conn === c) { NET.status = 'fail'; render(); } }, 15000);
-      c.on('open', () => { opened = true; clearTimeout(to); NET.status = 'ok'; render(); });
-      c.on('data', d => { if (d && d.t === 's') { NET.pending = d.s; applyRemote(); } });
+      c.on('open', () => { opened = true; clearTimeout(to); NET.status = 'ok'; render(); syncClock(c); });
+      c.on('data', d => {
+        if (d && d.t === 's') { NET.pending = d.s; applyRemote(); }
+        else if (d && d.t === 'P') onPong(d);
+      });
       c.on('close', () => {
         if (NET.conn !== c) return;
         NET.status = 'lost'; render();
@@ -2743,12 +3036,36 @@ body[data-screen="result"] .act { min-height: 0; }
       if (['network', 'server-error', 'socket-error', 'socket-closed', 'browser-incompatible', 'webrtc'].includes(e.type) && NET.status !== 'ok') { NET.status = 'fail'; render(); }
     });
   }
+  // 親のスマホとの時計のずれを測る（何回か測って、往復が一番速かった回を使う）
+  function syncClock(c) {
+    NET.ping = { c, n: 0, best: null };
+    const send = () => { try { c.send({ t: 'p', c: Date.now() }); } catch (e) { /* 送れなかった */ } };
+    NET.ping.send = send;
+    send();
+    clearInterval(NET.pingIv);
+    NET.pingIv = setInterval(() => { if (NET.conn === c && c.open) { NET.ping.n = 0; send(); } }, 30000);
+  }
+  function onPong(d) {
+    const now = Date.now(), rtt = now - d.c, P = NET.ping;
+    if (!P) return;
+    if (!P.best || rtt < P.best.rtt) { P.best = { rtt, skew: d.h - (d.c + rtt / 2) }; NET.skew = P.best.skew; }
+    if (++P.n < 6) setTimeout(P.send, 120);
+  }
+  function joinFormHTML(S) {
+    const team = !!S.setup.team, tn = (S.setup.players || []).map((n, i) => n.trim() || `チーム${TEAM_ABC[i]}`);
+    if (V.myName) return `<div class="join is-done"><p>参加しました：<b>${esc(V.myName)}</b>${team && V.myTeam !== undefined ? `（${esc(tn[V.myTeam] || '')}）` : ''}</p><button class="link" data-act="joinEdit">名前やチームを変える</button></div>`;
+    return `<div class="join">
+      <label>あなたの名前<input id="join-name" maxlength="10" value="${esc(V.typed || '')}" placeholder="例：ゆうた" autocomplete="nickname" enterkeyhint="done"></label>
+      ${team ? `<p class="join-h">入るチーム</p><div class="me-list">${tn.map((n, i) => `<button class="pchip${V.myTeam === i ? ' is-on' : ''}" style="--pc:${COLORS[i]}" data-act="joinTeam" data-i="${i}">${miniPawn(COLORS[i], n.slice(0, 1))}${esc(n)}</button>`).join('')}</div>` : ''}
+      <button class="big is-red" data-act="join">参加する</button>
+    </div>`;
+  }
   function guestWaitView() {
     const S = NET.got ? state : null;
     const msg = NET.status === 'fail' ? '幹事のスマホが見つかりませんでした'
       : NET.status === 'nolib' ? '通信の準備ができませんでした'
       : NET.status === 'lost' ? 'つなぎ直しています…'
-      : NET.status === 'ok' ? (S && S.screen === 'home' ? '幹事がゲームを始めるのを待っています' : 'つながりました')
+      : NET.status === 'ok' ? (S && S.screen === 'home' ? (V.myName ? '幹事がゲームを始めるのを待っています' : '名前を入れて参加してね') : 'つながりました')
       : '幹事のスマホにつないでいます…';
     const names = S ? (S.setup.players || []).map((n, i) => n.trim() || (S.setup.team ? `チーム${TEAM_ABC[i]}` : '')).filter(Boolean) : [];
     const bad = NET.status === 'fail' || NET.status === 'nolib';
@@ -2762,6 +3079,7 @@ body[data-screen="result"] .act { min-height: 0; }
           <p class="g-room">部屋番号 <b>${esc(GUEST_ROOM)}</b></p>
           <p class="g-msg${bad ? ' is-ng' : ''}">${esc(msg)}</p>
           ${bad ? '<p class="g-help">幹事のスマホでアプリが開いたままになっているか、ネットにつながっているかを確認してください</p>' : ''}
+          ${S && S.screen === 'home' && NET.status === 'ok' ? joinFormHTML(S) : ''}
           ${names.length ? `<ul class="g-names">${names.map((n, i) => `<li style="--pc:${COLORS[i]}">${miniPawn(COLORS[i], n.slice(0, 1))}<span>${esc(n)}</span></li>`).join('')}</ul>` : ''}
         </section>
       </main>
@@ -2779,7 +3097,7 @@ body[data-screen="result"] .act { min-height: 0; }
         const S = NET.pending; NET.pending = null;
         const old = state.game, ng = S.game;
         const live = NET.got && old && ng && S.screen === 'game' && state.screen === 'game' && old.board.seed === ng.board.seed && $('.mapwrap');
-        const prev = old ? { phase: old.phase, turn: old.turn, ok: old.ok, winner: old.winner, q: old.q && old.q.id, run: old.q && old.q.runAt } : {};
+        const prev = old ? { phase: old.phase, turn: old.turn, ok: old.ok, winner: old.winner, q: old.q && old.q.id, run: old.q && old.q.runAt, bz: old.q && old.q.bz ? { state: old.q.bz.state, out: old.q.bz.out.length, who: old.q.bz.who } : null } : {};
         const prevScreen = state.screen;
         if (live) {
           if ((ng.rollId || 0) !== (old.rollId || 0) && ng.dice) {
@@ -2817,12 +3135,18 @@ body[data-screen="result"] .act { min-height: 0; }
     const g = S.game;
     if (prevScreen !== 'result' && S.screen === 'result') { sound('drum'); setTimeout(() => { sound('fanfare'); confetti(60); }, RM ? 0 : 1500); return; }
     if (!g) return;
+    const b = g.q && g.q.bz;
+    if (b && prev.q === g.q.id && prev.bz) {
+      if (b.state === 'buzzed' && prev.bz.state !== 'buzzed') { sfx('buzzer'); buzz(40); telop(`<small>PINPON</small><b>${esc(g.players[b.who].name)}</b>`, 'is-turn', 1100); V.peek = false; }
+      if (b.out.length > prev.bz.out) { sound('wrong'); buzz([60, 40, 60]); }
+      if (b.state === 'done' && prev.bz.state !== 'done') { if (g.allOk.length) { sound('correct'); stamp(true); confetti(22); } else sound('reveal'); return; }
+    }
     if (prev.winner === null && g.winner !== null) {
       telop(`<small>GOAL</small><b>${esc(g.players[g.winner].name)}</b><span>がゴール！</span>`, 'is-goal', 2200);
       sound('fanfare'); confetti(44);
     }
     if (g.phase === 'question' && prev.q !== (g.q && g.q.id)) sound('question');
-    if (g.phase === 'reveal' && prev.phase !== 'reveal' && g.q && (g.q.all || g.ok === null)) sound('reveal');
+    if (g.phase === 'reveal' && prev.phase !== 'reveal' && g.q && !g.q.bz && (g.q.all || g.ok === null)) sound('reveal');
     if (g.phase === 'reveal' && prev.ok == null && g.ok != null && g.q && !g.q.all) {
       sound(g.ok ? 'correct' : 'wrong'); buzz(g.ok ? 30 : [60, 40, 60]);
       stamp(g.ok); if (g.ok) confetti(22);
